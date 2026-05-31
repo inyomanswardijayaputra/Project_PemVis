@@ -208,3 +208,71 @@ def upload_file(file: UploadFile = File(...)):
         "filename": file.filename,
         "file_path": f"/uploads/{file.filename}"
     }
+
+# ==========================================
+# TAMBAHAN API UNTUK PRODUK & BULK IMPORT 
+# ==========================================
+
+# 1. GET /api/products — Ambil semua produk (Untuk Dropdown Jaye)
+@app.get("/api/products")
+def get_all_products(db: Session = Depends(get_db)):
+    products = db.query(models.Product).all()
+    return {
+        "total_data": len(products),
+        "data": products
+    }
+
+# 2. POST /api/products — Tambah produk baru
+@app.post("/api/products")
+def create_product(product_data: schemas.ProductCreate, db: Session = Depends(get_db)):
+    db_product = models.Product(
+        nama_barang=product_data.nama_barang,
+        kategori=product_data.kategori,
+        harga=product_data.harga
+    )
+    db.add(db_product)
+    db.commit()
+    db.refresh(db_product)
+    return {
+        "message": "Produk berhasil ditambahkan!",
+        "data": db_product
+    }
+
+# 3. DELETE /api/products/{id} — Hapus produk
+@app.delete("/api/products/{product_id}")
+def delete_product(product_id: int, db: Session = Depends(get_db)):
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    
+    db.delete(product)
+    db.commit()
+    return {"message": f"Produk ID {product_id} berhasil dihapus"}
+
+# 4. POST /api/orders/bulk — Insert banyak pesanan sekaligus (Import CSV/Excel)
+@app.post("/api/orders/bulk")
+def create_bulk_orders(bulk_data: schemas.BulkOrderCreate, db: Session = Depends(get_db)):
+    inserted = 0
+    errors = []
+    
+    for order_data in bulk_data.orders:
+        try:
+            db_order = models.Order(
+                nama_pelanggan=order_data.nama_pelanggan,
+                product_id=order_data.product_id,
+                jumlah=order_data.jumlah,
+                total_harga=order_data.total_harga
+            )
+            db.add(db_order)
+            inserted += 1
+        except Exception as e:
+            errors.append(str(e))
+    
+    db.commit() 
+    
+    return {
+        "message": "Bulk insert selesai",
+        "inserted": inserted,
+        "skipped": len(bulk_data.orders) - inserted,
+        "errors": errors
+    }

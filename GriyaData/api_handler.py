@@ -8,7 +8,7 @@ import requests
 from dataclasses import dataclass, field
 from datetime import datetime
 
-API_BASE = "https://griyadataapi-zv35m9ms.b4a.run"
+API_BASE = "https://griyadataapi-4lkwxk47.b4a.run"
 
 
 @dataclass

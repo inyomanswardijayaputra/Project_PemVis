@@ -414,7 +414,7 @@ class DialogImport(QDialog):
         self.progress.setVisible(True)
         self.progress.setValue(0)
 
-        api_base = self.api.base if self.api else "https://griyadataapi-zv35m9ms.b4a.run"
+        api_base = self.api.base if self.api else "griyadataapi-4lkwxk47.b4a.run"
         self._worker = InsertWorker(api_base, orders)
         self._worker.progress.connect(self.progress.setValue)
         self._worker.finished.connect(self._on_insert_done)

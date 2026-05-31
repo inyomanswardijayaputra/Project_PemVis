@@ -9,81 +9,143 @@ class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("GriyaData - Login System")
-        self.setFixedSize(400, 500)
-        self.API_URL = "https://griyadataapi-zv35m9ms.b4a.run/api/login"
+        self.API_URL = "https://griyadataapi-4lkwxk47.b4a.run/api/login"
         self.initUI()
+        self.showMaximized()
         
     def initUI(self):
-        central_widget = QWidget(self)
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(40, 40, 40, 40)
-        main_layout.setSpacing(15)
+        outer_widget = QWidget(self)
+        outer_widget.setStyleSheet("background-color: #E8EAED;")
+        self.setCentralWidget(outer_widget)
         
-        title_label = QLabel("🎌  GriyaData", self)
-        title_label.setFont(QFont("Arial", 24, QFont.Bold))
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("color: #2C3E50;")
+        outer_layout = QVBoxLayout(outer_widget)
+        outer_layout.setAlignment(Qt.AlignCenter)
+        outer_layout.setContentsMargins(30, 30, 30, 30)
         
-        subtitle_label = QLabel("Aplikasi Manajemen Toko Miniatur", self)
-        subtitle_label.setFont(QFont("Arial", 10))
+        # Card putih
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget#card {
+                background-color: white;
+                border-radius: 16px;
+            }
+        """)
+        card.setObjectName("card")
+        card.setFixedWidth(480)
+        
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(0, 0, 0, 40)
+        card_layout.setSpacing(0)
+        
+        # Header biru solid — judul diperbesar
+        header = QLabel("GRIYADATA", card)
+        header.setAlignment(Qt.AlignCenter)
+        
+        header.setFixedHeight(90) 
+        
+        header.setStyleSheet("""
+            QLabel {
+                font-family: 'Arial';
+                font-size: 30px;         
+                font-weight: bold;      
+                background-color: #3AA0D5;
+                color: white;
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+                letter-spacing: 3px;
+            }
+        """)
+        card_layout.addWidget(header)
+        
+        subtitle_label = QLabel("Aplikasi Manajemen Toko Miniatur")
         subtitle_label.setAlignment(Qt.AlignCenter)
-        subtitle_label.setStyleSheet("color: #7F8C8D;")
+        subtitle_label.setStyleSheet("""
+            QLabel {
+                font-family: 'Arial';
+                font-size: 20px;         
+                font-weight: bold;       
+                color: #1A1A1A;
+                padding-top: 18px;
+                padding-bottom: 6px;
+                background-color: white;
+            }
+        """)
+        card_layout.addWidget(subtitle_label)
         
-        main_layout.addWidget(title_label)
-        main_layout.addWidget(subtitle_label)
-        main_layout.addSpacing(20)
+        # Form area
+        form_widget = QWidget()
+        form_widget.setStyleSheet("background-color: white;")
+        form_layout = QVBoxLayout(form_widget)
+        form_layout.setContentsMargins(36, 20, 36, 0)
+        form_layout.setSpacing(6)
         
-        username_label = QLabel("Username", self)
-        username_label.setFont(QFont("Arial", 10, QFont.Bold))
-        self.username_input = QLineEdit(self)
+        # Username
+        username_label = QLabel("Username:")
+        username_label.setFont(QFont("Arial", 11))
+        username_label.setStyleSheet("color: #34495E; background: transparent;")
+        self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Masukkan username Anda")
         self.username_input.setStyleSheet(self.input_style())
+        self.username_input.setFixedHeight(48)
         
-        main_layout.addWidget(username_label)
-        main_layout.addWidget(self.username_input)
+        form_layout.addWidget(username_label)
+        form_layout.addWidget(self.username_input)
+        form_layout.addSpacing(12)
         
-        password_label = QLabel("Password", self)
-        password_label.setFont(QFont("Arial", 10, QFont.Bold))
-        self.password_input = QLineEdit(self)
+        # Password
+        password_label = QLabel("Password:")
+        password_label.setFont(QFont("Arial", 11))
+        password_label.setStyleSheet("color: #34495E; background: transparent;")
+        self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Masukkan password Anda")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setStyleSheet(self.input_style())
+        self.password_input.setFixedHeight(48)
         self.password_input.returnPressed.connect(self.handle_login)
         
-        main_layout.addWidget(password_label)
-        main_layout.addWidget(self.password_input)
-        main_layout.addSpacing(10)
+        form_layout.addWidget(password_label)
+        form_layout.addWidget(self.password_input)
+        form_layout.addSpacing(24)
         
-        self.login_button = QPushButton("Masuk Ke Sistem", self)
-        self.login_button.setFont(QFont("Arial", 11, QFont.Bold))
+        # Tombol Login
+        self.login_button = QPushButton("Masuk Ke Sistem")
+        self.login_button.setFont(QFont("Arial", 12, QFont.Bold))
         self.login_button.setCursor(Qt.PointingHandCursor)
+        self.login_button.setFixedHeight(50)
         self.login_button.setStyleSheet("""
             QPushButton {
-                background-color: #2980B9;
+                background-color: #3AA0D5;
                 color: white;
-                border-radius: 6px;
-                padding: 12px;
+                border-radius: 10px;
+                font-size: 13px;
+                letter-spacing: 1px;
             }
-            QPushButton:hover { background-color: #3498DB; }
-            QPushButton:pressed { background-color: #1F618D; }
+            QPushButton:hover { background-color: #2E86C1; }
+            QPushButton:pressed { background-color: #1A5276; }
+            QPushButton:disabled { background-color: #AED6F1; }
         """)
         self.login_button.clicked.connect(self.handle_login)
-        main_layout.addWidget(self.login_button)
-        main_layout.addStretch()
+        form_layout.addWidget(self.login_button)
+        
+        card_layout.addWidget(form_widget)
+        outer_layout.addWidget(card, alignment=Qt.AlignCenter)
         
     def input_style(self):
         return """
             QLineEdit {
-                border: 2px solid #BDC3C7;
-                border-radius: 6px;
-                padding: 10px;
-                font-size: 11px;
-                background-color: #FAFAFA;
+                border: 1.5px solid #D5D8DC;
+                border-radius: 8px;
+                padding: 10px 14px;
+                font-size: 12px;
+                background-color: #FDFEFE;
+                color: #2C3E50;
             }
             QLineEdit:focus {
-                border: 2px solid #2980B9;
+                border: 2px solid #3AA0D5;
                 background-color: white;
+            }
+            QLineEdit::placeholder {
+                color: #AEB6BF;
             }
         """
         
@@ -95,7 +157,12 @@ class LoginWindow(QMainWindow):
             QMessageBox.warning(self, "Peringatan", "Username dan Password wajib diisi!")
             return
             
-        payload = {"username": username, "password": password}
+        payload = {
+            "username": username, 
+            "password": password,
+            "role": "Admin"
+        }
+        
         self.login_button.setText("Memverifikasi...")
         self.login_button.setEnabled(False)
         
@@ -105,9 +172,14 @@ class LoginWindow(QMainWindow):
             if response.status_code == 200:
                 self._open_dashboard(username)
             else:
-                # Parsing JSON dengan aman
                 try:
                     error_detail = response.json().get("detail", "Login gagal.")
+                    
+                    if isinstance(error_detail, list):
+                        error_detail = str(error_detail[0].get("msg", "Data tidak lengkap/salah format."))
+                    elif not isinstance(error_detail, str):
+                        error_detail = str(error_detail)
+                        
                 except Exception:
                     error_detail = (
                         f"Server mengembalikan respons tidak valid "
@@ -153,5 +225,4 @@ class LoginWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = LoginWindow()
-    window.show()
     sys.exit(app.exec())
