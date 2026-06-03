@@ -5,7 +5,7 @@ Jalankan: python app.py
 import sys
 import os
 from PySide6.QtWidgets import QApplication
-from login_window import LoginWindow
+from ui.login_window import LoginWindow
 
 def main():
     app = QApplication(sys.argv)
