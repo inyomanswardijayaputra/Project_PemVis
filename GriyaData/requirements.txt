@@ -1,4 +1,4 @@
-# ── Backend API (FastAPI + Supabase) ──────────────
+# ── Backend API (FastAPI + Supabase) ──────────────────
 fastapi
 uvicorn
 sqlalchemy
@@ -6,10 +6,14 @@ psycopg2-binary
 python-multipart
 pydantic
 
-# ── PySide6 Desktop App ───────────────────────────
+# ── PySide6 Desktop App ───────────────────────────────
 PySide6
 requests
 matplotlib
 pandas
 openpyxl      # baca file .xlsx
 xlrd          # baca file .xls (format lama)
+
+# ── Machine Learning ──────────────────────────────────
+scikit-learn  # Random Forest Regressor, metrics
+numpy         # array & math operations

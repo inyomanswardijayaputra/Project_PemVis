@@ -9,7 +9,7 @@ class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("GriyaData - Login System")
-        self.API_URL = "https://griyadataapi-4lkwxk47.b4a.run/api/login"
+        self.API_URL = "https://griyadata-backend-production.up.railway.app/api/login"
         self.initUI()
         self.showMaximized()
         

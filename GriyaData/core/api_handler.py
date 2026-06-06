@@ -1,191 +1,215 @@
 """
-api_handler.py
-Menangani semua komunikasi dengan API FastAPI GriyaData.
-Data diambil dari API (bukan SQLite lokal) agar sinkron dengan Supabase.
+core/api_handler.py
+Komunikasi dengan REST API GriyaData — schema baru (20 kolom).
 """
 
 import requests
 from dataclasses import dataclass, field
-from datetime import datetime
 
-API_BASE = "https://griyadataapi-4lkwxk47.b4a.run"
-
-
-@dataclass
-class OrderRecord:
-    id: int
-    nama_pelanggan: str
-    product_id: int
-    jumlah: int
-    total_harga: float
-    tanggal_pesanan: str
-    status_pesanan: str
-    metode_pembayaran: str
-    # Info produk (dari join lokal)
-    nama_barang: str = ""
-    kategori: str = ""
-    harga_satuan: float = 0.0
+API_BASE = "https://griyadata-backend-production.up.railway.app"
 
 
 @dataclass
 class ProductRecord:
-    id: int
-    nama_barang: str
-    kategori: str
-    harga: float
+    id:           int
+    product_name: str
+    category:     str
+    price:        float
+
+
+@dataclass
+class OrderRecord:
+    # ── dari tabel orders ──────────────────────────────────────────────────
+    id:                      int
+    order_id:                str
+    customer_name:           str
+    product_id:              int
+    quantity:                int
+    discount:                float
+    total:                   float
+    shipping_fee:            float
+    total_sales:             float
+    status:                  str
+    shipping_address:        str
+    customer_gender:         str
+    customer_city:           str
+    payment_method:          str
+    courier:                 str
+    estimated_delivery_days: int
+    sales_channel:           str
+    customer_rating:         float
+    sales_date:              str
+    # ── dari join products ─────────────────────────────────────────────────
+    product_name: str = ""
+    category:     str = ""
+    price:        float = 0.0
+
+    # ── backward-compat aliases (dipakai ml/predictor.py) ──────────────────
+    @property
+    def nama_barang(self):       return self.product_name
+    @property
+    def kategori(self):          return self.category
+    @property
+    def jumlah(self):            return self.quantity
+    @property
+    def total_harga(self):       return self.total_sales
+    @property
+    def tanggal_pesanan(self):   return self.sales_date
+    @property
+    def status_pesanan(self):    return self.status
+    @property
+    def metode_pembayaran(self): return self.payment_method
 
 
 class APIHandler:
-    """Wrapper untuk memanggil REST API GriyaData."""
-
     def __init__(self, base_url: str = API_BASE):
         self.base = base_url.rstrip("/")
         self._products_cache: list[ProductRecord] = []
 
-    # ─── Products ──────────────────────────────────────────────────────────────
+    # ── Products ──────────────────────────────────────────────────────────────
 
     def get_products(self) -> list[ProductRecord]:
-        """Ambil daftar produk dari API (dengan cache sederhana)."""
         try:
             r = requests.get(f"{self.base}/api/products", timeout=10)
             if r.status_code == 200:
-                data = r.json().get("data", [])
                 self._products_cache = [
                     ProductRecord(
                         id=p["id"],
-                        nama_barang=p["nama_barang"],
-                        kategori=p.get("kategori", "Lainnya"),
-                        harga=float(p.get("harga", 0)),
+                        product_name=p["product_name"],
+                        category=p.get("category", "Lainnya"),
+                        price=float(p.get("price", 0)),
                     )
-                    for p in data
+                    for p in r.json().get("data", [])
                 ]
         except Exception:
             pass
         return self._products_cache
 
-    def get_product_by_id(self, pid: int) -> ProductRecord | None:
-        for p in self._products_cache:
-            if p.id == pid:
-                return p
-        # refresh cache
-        self.get_products()
-        for p in self._products_cache:
-            if p.id == pid:
-                return p
-        return None
+    def create_product(self, data: dict) -> dict:
+        """data: {product_name, category, price}"""
+        r = requests.post(f"{self.base}/api/products", json=data, timeout=10)
+        r.raise_for_status()
+        self._products_cache = []    # invalidate cache
+        return r.json()
 
-    # ─── Orders ────────────────────────────────────────────────────────────────
+    def update_product(self, pid: int, data: dict) -> dict:
+        r = requests.put(f"{self.base}/api/products/{pid}", json=data, timeout=10)
+        r.raise_for_status()
+        self._products_cache = []
+        return r.json()
 
-    def get_all_orders(
-        self,
-        status: str = "All",
-        metode: str = "All",
-    ) -> list[OrderRecord]:
+    def delete_product(self, pid: int) -> dict:
+        r = requests.delete(f"{self.base}/api/products/{pid}", timeout=10)
+        r.raise_for_status()
+        self._products_cache = []
+        return r.json()
+
+    # ── Orders ────────────────────────────────────────────────────────────────
+
+    def get_all_orders(self, status: str = "All",
+                       channel: str = "All") -> list[OrderRecord]:
         try:
-            r = requests.get(f"{self.base}/api/orders", timeout=10)
+            r = requests.get(f"{self.base}/api/orders", timeout=15)
             if r.status_code != 200:
                 return []
             raw = r.json().get("data", [])
         except Exception:
             return []
 
-        # Pastikan cache produk terisi
         if not self._products_cache:
             self.get_products()
+        pmap = {p.id: p for p in self._products_cache}
 
-        product_map = {p.id: p for p in self._products_cache}
-
-        orders: list[OrderRecord] = []
+        orders = []
         for o in raw:
-            prod = product_map.get(o.get("product_id", 0))
+            prod = pmap.get(o.get("product_id", 0))
             rec = OrderRecord(
                 id=o["id"],
-                nama_pelanggan=o.get("nama_pelanggan", ""),
+                order_id=o.get("order_id") or "",
+                customer_name=o.get("customer_name", ""),
                 product_id=o.get("product_id", 0),
-                jumlah=o.get("jumlah", 0),
-                total_harga=float(o.get("total_harga", 0)),
-                tanggal_pesanan=o.get("tanggal_pesanan", "")[:10],
-                status_pesanan=o.get("status_pesanan", "Pending"),
-                metode_pembayaran=o.get("metode_pembayaran", ""),
-                nama_barang=prod.nama_barang if prod else f"[ID {o.get('product_id')}]",
-                kategori=prod.kategori if prod else "Lainnya",
-                harga_satuan=prod.harga if prod else 0.0,
+                quantity=o.get("quantity", 0),
+                discount=float(o.get("discount") or 0),
+                total=float(o.get("total") or 0),
+                shipping_fee=float(o.get("shipping_fee") or 0),
+                total_sales=float(o.get("total_sales") or 0),
+                status=o.get("status", "Pending"),
+                shipping_address=o.get("shipping_address") or "",
+                customer_gender=o.get("customer_gender") or "",
+                customer_city=o.get("customer_city") or "",
+                payment_method=o.get("payment_method") or "Offline/COD",
+                courier=o.get("courier") or "",
+                estimated_delivery_days=int(o.get("estimated_delivery_days") or 0),
+                sales_channel=o.get("sales_channel") or "",
+                customer_rating=float(o.get("customer_rating") or 0),
+                sales_date=(o.get("sales_date") or "")[:10],
+                product_name=prod.product_name if prod else f"[ID {o.get('product_id')}]",
+                category=prod.category if prod else "Lainnya",
+                price=prod.price if prod else 0.0,
             )
-            # Filter
-            if status != "All" and rec.status_pesanan != status:
-                continue
-            if metode != "All" and rec.metode_pembayaran != metode:
-                continue
+            if status  != "All" and rec.status != status:      continue
+            if channel != "All" and rec.sales_channel != channel: continue
             orders.append(rec)
-
         return orders
 
     def create_order(self, data: dict) -> dict:
-        """POST /api/orders — data: {nama_pelanggan, product_id, jumlah, total_harga}"""
         r = requests.post(f"{self.base}/api/orders", json=data, timeout=10)
         r.raise_for_status()
         return r.json()
 
     def update_order_status(self, order_id: int, status: str) -> dict:
-        """PUT /api/orders/{id}"""
-        r = requests.put(
-            f"{self.base}/api/orders/{order_id}",
-            json={"status_pesanan": status},
-            timeout=10,
-        )
+        r = requests.put(f"{self.base}/api/orders/{order_id}",
+                         json={"status": status}, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
+    def update_order(self, order_id: int, data: dict) -> dict:
+        """PUT /api/orders/{id} — update semua field order."""
+        r = requests.put(f"{self.base}/api/orders/{order_id}", json=data, timeout=10)
         r.raise_for_status()
         return r.json()
 
     def delete_order(self, order_id: int) -> dict:
-        """DELETE /api/orders/{id}"""
         r = requests.delete(f"{self.base}/api/orders/{order_id}", timeout=10)
         r.raise_for_status()
         return r.json()
 
-    # ─── Aggregasi untuk Chart & Stats ─────────────────────────────────────────
+    # ── Aggregasi untuk Dashboard & Chart ────────────────────────────────────
 
-    def summary_stats(self, orders: list[OrderRecord] | None = None) -> dict:
-        if orders is None:
-            orders = self.get_all_orders()
-        total_tx = len(orders)
-        total_rev = sum(o.total_harga for o in orders)
-        avg_rev = total_rev / total_tx if total_tx else 0
-        total_units = sum(o.jumlah for o in orders)
-        return {
-            "total_tx": total_tx,
-            "total_rev": total_rev,
-            "avg_rev": avg_rev,
-            "total_units": total_units,
-        }
+    def summary_stats(self, orders: list[OrderRecord]) -> dict:
+        n = len(orders)
+        rev   = sum(o.total_sales for o in orders)
+        units = sum(o.quantity for o in orders)
+        return {"total_tx": n, "total_rev": rev,
+                "avg_rev": rev / n if n else 0, "total_units": units}
 
-    def revenue_by_kategori(self, orders: list[OrderRecord]) -> dict[str, float]:
-        result: dict[str, float] = {}
+    def revenue_by_kategori(self, orders):
+        r = {}
         for o in orders:
-            result[o.kategori] = result.get(o.kategori, 0) + o.total_harga
-        return dict(sorted(result.items(), key=lambda x: x[1], reverse=True))
+            r[o.category] = r.get(o.category, 0) + o.total_sales
+        return dict(sorted(r.items(), key=lambda x: -x[1]))
 
-    def revenue_by_status(self, orders: list[OrderRecord]) -> dict[str, float]:
-        result: dict[str, float] = {}
+    def revenue_by_status(self, orders):
+        r = {}
         for o in orders:
-            result[o.status_pesanan] = result.get(o.status_pesanan, 0) + o.total_harga
-        return dict(sorted(result.items(), key=lambda x: x[1], reverse=True))
+            r[o.status] = r.get(o.status, 0) + o.total_sales
+        return dict(sorted(r.items(), key=lambda x: -x[1]))
 
-    def revenue_by_month(self, orders: list[OrderRecord]) -> dict[str, float]:
-        result: dict[str, float] = {}
+    def revenue_by_month(self, orders):
+        r = {}
         for o in orders:
-            month = o.tanggal_pesanan[:7] if len(o.tanggal_pesanan) >= 7 else "?"
-            result[month] = result.get(month, 0) + o.total_harga
-        return dict(sorted(result.items()))
+            m = o.sales_date[:7] if len(o.sales_date) >= 7 else "?"
+            r[m] = r.get(m, 0) + o.total_sales
+        return dict(sorted(r.items()))
 
-    def units_by_payment(self, orders: list[OrderRecord]) -> dict[str, int]:
-        result: dict[str, int] = {}
+    def units_by_payment(self, orders):
+        r = {}
         for o in orders:
-            result[o.metode_pembayaran] = result.get(o.metode_pembayaran, 0) + o.jumlah
-        return dict(sorted(result.items(), key=lambda x: x[1], reverse=True))
+            r[o.payment_method] = r.get(o.payment_method, 0) + o.quantity
+        return dict(sorted(r.items(), key=lambda x: -x[1]))
 
-    def top_products(self, orders: list[OrderRecord], n: int = 10) -> dict[str, float]:
-        result: dict[str, float] = {}
+    def top_products(self, orders, n=10):
+        r = {}
         for o in orders:
-            result[o.nama_barang] = result.get(o.nama_barang, 0) + o.total_harga
-        sorted_items = sorted(result.items(), key=lambda x: x[1], reverse=True)
-        return dict(sorted_items[:n])
+            r[o.product_name] = r.get(o.product_name, 0) + o.total_sales
+        return dict(sorted(r.items(), key=lambda x: -x[1])[:n])
