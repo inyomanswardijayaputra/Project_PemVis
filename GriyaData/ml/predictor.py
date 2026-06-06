@@ -1,8 +1,3 @@
-"""
-ml/predictor.py — Random Forest Sales Predictor (schema baru)
-Menggunakan field: sales_date, product_name, category, quantity, total_sales, status
-"""
-
 from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
@@ -95,7 +90,6 @@ class SalesPredictor:
         rows = []
         for o in orders:
             try:
-                # ── Schema baru: sales_date, product_name, category, quantity, total_sales ──
                 tgl = pd.to_datetime(o.sales_date)
                 rows.append({
                     "tanggal":  tgl,
@@ -110,7 +104,6 @@ class SalesPredictor:
         df = pd.DataFrame(rows)
         if df.empty:
             return df
-        # Hanya pesanan yang tidak dibatalkan
         df = df[df["status"] != "Dibatalkan"].copy()
         return df
 

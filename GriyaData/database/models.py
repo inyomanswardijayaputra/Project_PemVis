@@ -16,14 +16,14 @@ class Order(Base):
     __tablename__ = "orders"
 
     id                     = Column(Integer, primary_key=True, index=True)
-    order_id               = Column(String, index=True)          # e.g. "ORD00001"
+    order_id               = Column(String, index=True)          
     customer_name          = Column(String)
     product_id             = Column(Integer, ForeignKey("products.id"))
     quantity               = Column(Integer)
     discount               = Column(Float, default=0)
-    total                  = Column(Float)                       # setelah diskon
+    total                  = Column(Float)                       
     shipping_fee           = Column(Float, default=0)
-    total_sales            = Column(Float)                       # total + shipping_fee
+    total_sales            = Column(Float)                       
     status                 = Column(String, default="Pending")
     shipping_address       = Column(String, default="")
     customer_gender        = Column(String, default="")

@@ -2,13 +2,13 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
+# Auth
 class LoginRequest(BaseModel):
     username: str
     password: str
 
 
-# ── Products ──────────────────────────────────────────────────────────────────
+# Products
 class ProductCreate(BaseModel):
     product_name: str
     category:     str
@@ -20,7 +20,7 @@ class ProductUpdate(BaseModel):
     price:        Optional[float] = None
 
 
-# ── Orders ────────────────────────────────────────────────────────────────────
+# Orders 
 class OrderCreate(BaseModel):
     order_id:               Optional[str]   = None
     customer_name:          str
@@ -29,7 +29,7 @@ class OrderCreate(BaseModel):
     discount:               Optional[float] = 0
     total:                  float
     shipping_fee:           Optional[float] = 0
-    total_sales:            Optional[float] = None   # auto = total + shipping_fee kalau None
+    total_sales:            Optional[float] = None   
     status:                 Optional[str]   = "Pending"
     shipping_address:       Optional[str]   = ""
     customer_gender:        Optional[str]   = ""
@@ -39,12 +39,12 @@ class OrderCreate(BaseModel):
     estimated_delivery_days:Optional[int]   = 0
     sales_channel:          Optional[str]   = ""
     customer_rating:        Optional[float] = 0
-    sales_date:             Optional[str]   = None   # ISO string
+    sales_date:             Optional[str]   = None   
 
 class OrderUpdate(BaseModel):
     status: str
 
 
-# ── Bulk Orders ───────────────────────────────────────────────────────────────
+# Bulk Orders
 class BulkOrderCreate(BaseModel):
     orders: List[OrderCreate]

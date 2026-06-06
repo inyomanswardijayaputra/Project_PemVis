@@ -1,8 +1,3 @@
-"""
-core/api_handler.py
-Komunikasi dengan REST API GriyaData — schema baru (20 kolom).
-"""
-
 import requests
 from dataclasses import dataclass, field
 
@@ -19,7 +14,6 @@ class ProductRecord:
 
 @dataclass
 class OrderRecord:
-    # ── dari tabel orders ──────────────────────────────────────────────────
     id:                      int
     order_id:                str
     customer_name:           str
@@ -39,12 +33,10 @@ class OrderRecord:
     sales_channel:           str
     customer_rating:         float
     sales_date:              str
-    # ── dari join products ─────────────────────────────────────────────────
     product_name: str = ""
     category:     str = ""
     price:        float = 0.0
 
-    # ── backward-compat aliases (dipakai ml/predictor.py) ──────────────────
     @property
     def nama_barang(self):       return self.product_name
     @property
@@ -66,8 +58,7 @@ class APIHandler:
         self.base = base_url.rstrip("/")
         self._products_cache: list[ProductRecord] = []
 
-    # ── Products ──────────────────────────────────────────────────────────────
-
+    # Products
     def get_products(self) -> list[ProductRecord]:
         try:
             r = requests.get(f"{self.base}/api/products", timeout=10)
@@ -89,7 +80,7 @@ class APIHandler:
         """data: {product_name, category, price}"""
         r = requests.post(f"{self.base}/api/products", json=data, timeout=10)
         r.raise_for_status()
-        self._products_cache = []    # invalidate cache
+        self._products_cache = []   
         return r.json()
 
     def update_product(self, pid: int, data: dict) -> dict:
@@ -104,8 +95,7 @@ class APIHandler:
         self._products_cache = []
         return r.json()
 
-    # ── Orders ────────────────────────────────────────────────────────────────
-
+    # Orders
     def get_all_orders(self, status: str = "All",
                        channel: str = "All") -> list[OrderRecord]:
         try:
@@ -174,8 +164,7 @@ class APIHandler:
         r.raise_for_status()
         return r.json()
 
-    # ── Aggregasi untuk Dashboard & Chart ────────────────────────────────────
-
+    # Aggregasi untuk Dashboard & Chart
     def summary_stats(self, orders: list[OrderRecord]) -> dict:
         n = len(orders)
         rev   = sum(o.total_sales for o in orders)

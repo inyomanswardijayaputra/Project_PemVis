@@ -1,8 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
-# ─── Konstanta Data ────────────────────────────────────────────────────────────
-
+# Konstanta Data 
 KATEGORI_PRODUK = [
     "Gundam / Mecha",
     "Action Figure",
@@ -47,8 +46,7 @@ STATUS_COLORS = {
 }
 
 
-# ─── Validation ────────────────────────────────────────────────────────────────
-
+# Validation
 @dataclass
 class ValidationResult:
     valid: bool
@@ -101,8 +99,7 @@ class OrderValidator:
         return round(jumlah * harga_satuan, 2)
 
 
-# ─── Formatter ─────────────────────────────────────────────────────────────────
-
+# Formatter
 class Formatter:
 
     @staticmethod

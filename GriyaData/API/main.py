@@ -1,9 +1,3 @@
-"""
-API/main.py — GriyaData REST API (schema baru)
-Products: product_name, category, price
-Orders  : semua 20 kolom dari file
-"""
-
 import os
 import shutil
 from datetime import datetime
@@ -12,9 +6,9 @@ from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
-import models
+from database import models
 from database import engine, get_db
-import schemas
+from database import schemas
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -25,13 +19,13 @@ os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
-# ─── ROOT ─────────────────────────────────────────────────────────────────────
+# ROOT
 @app.get("/")
 def read_root():
     return {"message": "API GriyaData berhasil terhubung ke Database Supabase."}
 
 
-# ─── AUTH ─────────────────────────────────────────────────────────────────────
+# AUTH
 @app.post("/api/login")
 def login_admin(request: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(
@@ -42,8 +36,7 @@ def login_admin(request: schemas.LoginRequest, db: Session = Depends(get_db)):
     raise HTTPException(status_code=400, detail="Username atau password salah")
 
 
-# ─── PRODUCTS ─────────────────────────────────────────────────────────────────
-
+# PRODUCTS
 def _product_dict(p) -> dict:
     return {"id": p.id, "product_name": p.product_name,
             "category": p.category, "price": p.price}
@@ -89,8 +82,7 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     return {"message": f"Produk ID {product_id} berhasil dihapus."}
 
 
-# ─── ORDERS ───────────────────────────────────────────────────────────────────
-
+# ORDERS
 def _parse_date(s) -> datetime | None:
     if not s:
         return None
@@ -159,32 +151,15 @@ def create_order(data: schemas.OrderCreate, db: Session = Depends(get_db)):
 
 
 @app.put("/api/orders/{order_id}")
-def update_order(order_id: int, data: schemas.OrderCreate,
-                 db: Session = Depends(get_db)):
+def update_order_status(order_id: int, request: schemas.OrderUpdate,
+                        db: Session = Depends(get_db)):
     o = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not o:
         raise HTTPException(404, "Pesanan tidak ditemukan")
-    # Update semua field yang dikirim
-    if data.order_id               is not None: o.order_id               = data.order_id
-    if data.customer_name:                       o.customer_name          = data.customer_name
-    if data.product_id:                          o.product_id             = data.product_id
-    if data.quantity:                            o.quantity               = data.quantity
-    if data.discount               is not None: o.discount               = data.discount or 0
-    if data.total                  is not None: o.total                  = data.total
-    if data.shipping_fee           is not None: o.shipping_fee           = data.shipping_fee or 0
-    if data.total_sales            is not None: o.total_sales            = data.total_sales
-    if data.status                 is not None: o.status                 = data.status
-    if data.shipping_address       is not None: o.shipping_address       = data.shipping_address
-    if data.customer_gender        is not None: o.customer_gender        = data.customer_gender
-    if data.customer_city          is not None: o.customer_city          = data.customer_city
-    if data.payment_method         is not None: o.payment_method         = data.payment_method
-    if data.courier                is not None: o.courier                = data.courier
-    if data.estimated_delivery_days is not None: o.estimated_delivery_days = data.estimated_delivery_days
-    if data.sales_channel          is not None: o.sales_channel          = data.sales_channel
-    if data.customer_rating        is not None: o.customer_rating        = data.customer_rating
-    if data.sales_date             is not None: o.sales_date             = _parse_date(data.sales_date)
+    o.status = request.status
     db.commit(); db.refresh(o)
-    return {"message": f"Pesanan ID {order_id} berhasil diperbarui.", "data": _order_dict(o)}
+    return {"message": f"Status pesanan ID {order_id} → {request.status}",
+            "data": _order_dict(o)}
 
 
 @app.delete("/api/orders/{order_id}")
@@ -231,8 +206,7 @@ def bulk_insert_orders(payload: schemas.BulkOrderCreate,
     return {"message": f"Bulk insert selesai. {inserted} berhasil, {skipped} dilewati.",
             "inserted": inserted, "skipped": skipped, "errors": errors[:10]}
 
-
-# ─── FILE UPLOAD ──────────────────────────────────────────────────────────────
+# FILE UPLOAD
 @app.post("/api/upload")
 def upload_file(file: UploadFile = File(...)):
     loc = f"uploads/{file.filename}"

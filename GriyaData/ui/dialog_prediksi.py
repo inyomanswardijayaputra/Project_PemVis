@@ -1,26 +1,3 @@
-"""
-ui/dialog_prediksi.py
-─────────────────────────────────────────────────────────────────────────────
-Dialog Prediksi Penjualan — GriyaData ML Feature
-─────────────────────────────────────────────────────────────────────────────
-
-Tampilan:
-  ┌─────────────────────────────────────────────────────────────┐
-  │ 🤖  Prediksi Penjualan (Machine Learning)                   │
-  ├───────────────┬─────────────────────────────────────────────┤
-  │ [Sidebar]     │  [Chart: historis + prediksi]               │
-  │  Target       │                                             │
-  │  ○ Semua      │  [Tab: Linear | Random Forest | Perbandingan]│
-  │  ○ Per Produk │                                             │
-  │               ├─────────────────────────────────────────────┤
-  │  Produk: [v]  │  [Insight Box]                              │
-  │               │                                             │
-  │  Bulan: [3]   │  [Tabel: Bulan | Linear | RF | Selisih]     │
-  │               │                                             │
-  │  [🔮 Prediksi]│                                             │
-  └───────────────┴─────────────────────────────────────────────┘
-"""
-
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -38,34 +15,31 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QFont, QColor
 
-# ── ML engine ────────────────────────────────────────────────────────────────
+# ML engine
 from ml.predictor import (
     predict_total_penjualan,
     predict_per_produk,
     daftar_produk_dari_orders,
     HarapanPrediksi,
+    HasilPrediksi,
 )
 
-# ── Formatter (reuse dari utils) ─────────────────────────────────────────────
+# Formatter 
 try:
     from utils import Formatter
     _fmt_currency = Formatter.currency
 except Exception:
     def _fmt_currency(v): return f"Rp {v:,.0f}"
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Background worker thread
-# ─────────────────────────────────────────────────────────────────────────────
-
 class PrediksiWorker(QThread):
-    finished = Signal(object)   # HarapanPrediksi
+    finished = Signal(object) 
     error    = Signal(str)
 
     def __init__(self, orders, mode: str, nama_produk: str, n_bulan: int):
         super().__init__()
         self.orders      = orders
-        self.mode        = mode          # "semua" | "produk"
+        self.mode        = mode          
         self.nama_produk = nama_produk
         self.n_bulan     = n_bulan
 
@@ -79,11 +53,7 @@ class PrediksiWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Chart Canvas
-# ─────────────────────────────────────────────────────────────────────────────
-
 class PrediksiCanvas(FigureCanvas):
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(9, 4), facecolor="#f8fafc")
@@ -105,7 +75,6 @@ class PrediksiCanvas(FigureCanvas):
         all_labels = hist_labels + pred_labels
         n_hist = len(hist_labels)
 
-        # Garis historis
         ax.plot(
             range(n_hist),
             hist_values,
@@ -114,7 +83,6 @@ class PrediksiCanvas(FigureCanvas):
         )
         ax.fill_between(range(n_hist), hist_values, alpha=0.12, color="#3b82f6")
 
-        # Garis prediksi (sambung dari titik terakhir historis)
         pred_x = range(n_hist - 1, n_hist + len(pred_values))
         pred_y = [hist_values[-1]] + pred_values if hist_values else pred_values
         ax.plot(
@@ -124,13 +92,11 @@ class PrediksiCanvas(FigureCanvas):
         )
         ax.fill_between(pred_x, pred_y, alpha=0.10, color=warna_pred)
 
-        # Garis pemisah historis/prediksi
         if n_hist > 0:
             ax.axvline(x=n_hist - 1, color="#94a3b8", linestyle=":", linewidth=1.5, alpha=0.7)
             ax.text(n_hist - 1 + 0.1, ax.get_ylim()[1] * 0.95 if ax.get_ylim()[1] > 0 else 1,
                     "← Historis | Prediksi →", fontsize=8, color="#64748b")
 
-        # Anotasi nilai prediksi
         for i, (lbl, val) in enumerate(zip(pred_labels, pred_values)):
             ax.annotate(
                 f"Rp {val/1_000_000:.1f}Jt" if val >= 1_000_000 else f"Rp {val:,.0f}",
@@ -197,20 +163,15 @@ class PrediksiCanvas(FigureCanvas):
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-        # Tandai rekomendasi
         rekomendasi = hasil.rekomendasi_model
         rek_color = "#3b82f6" if rekomendasi == "Linear Regression" else "#10b981"
-        ax.set_xlabel(f"⭐ Model Rekomendasi: {rekomendasi}", fontsize=9,
+        ax.set_xlabel(f"Model Rekomendasi: {rekomendasi}", fontsize=9,
                       color=rek_color, fontweight="bold")
 
         self.fig.tight_layout()
         self.draw()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Main Dialog
-# ─────────────────────────────────────────────────────────────────────────────
-
 class DialogPrediksi(QDialog):
     """
     Dialog utama fitur prediksi ML GriyaData.
@@ -223,7 +184,7 @@ class DialogPrediksi(QDialog):
         self._hasil: HarapanPrediksi | None = None
         self._worker: PrediksiWorker | None = None
 
-        self.setWindowTitle("🤖  Prediksi Penjualan — Machine Learning GriyaData")
+        self.setWindowTitle("Prediksi Penjualan — Machine Learning GriyaData")
         self.setMinimumSize(1100, 680)
         self.resize(1200, 720)
         self.setModal(True)
@@ -231,19 +192,13 @@ class DialogPrediksi(QDialog):
         self._daftar_produk = daftar_produk_dari_orders(self.orders)
         self._build_ui()
 
-    # ─────────────────────────────────────────────────────────────────────────
     # Build UI
-    # ─────────────────────────────────────────────────────────────────────────
-
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-
-        # Header
         root.addWidget(self._make_header())
 
-        # Body: sidebar + konten
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
@@ -304,8 +259,7 @@ class DialogPrediksi(QDialog):
         lay.setContentsMargins(16, 20, 16, 16)
         lay.setSpacing(14)
 
-        # ── Target prediksi ──
-        lbl_target = QLabel("🎯  Target Prediksi")
+        lbl_target = QLabel("Target Prediksi")
         lbl_target.setStyleSheet("font-weight:700;font-size:12px;color:#1e293b;")
         lay.addWidget(lbl_target)
 
@@ -321,8 +275,7 @@ class DialogPrediksi(QDialog):
         lay.addWidget(self._radio_semua)
         lay.addWidget(self._radio_produk)
 
-        # ── Pilih produk ──
-        lbl_produk = QLabel("📦  Pilih Produk:")
+        lbl_produk = QLabel("Pilih Produk:")
         lbl_produk.setStyleSheet("font-size:11px;color:#64748b;")
         lay.addWidget(lbl_produk)
 
@@ -336,8 +289,7 @@ class DialogPrediksi(QDialog):
         sep1.setStyleSheet("color:#cbd5e1;")
         lay.addWidget(sep1)
 
-        # ── Jumlah bulan ──
-        lbl_bulan = QLabel("📅  Prediksi (bulan ke depan):")
+        lbl_bulan = QLabel("Prediksi (bulan ke depan):")
         lbl_bulan.setStyleSheet("font-size:11px;color:#64748b;")
         lay.addWidget(lbl_bulan)
 
@@ -349,7 +301,6 @@ class DialogPrediksi(QDialog):
 
         lay.addStretch()
 
-        # ── Progress bar ──
         self._progress = QProgressBar()
         self._progress.setRange(0, 0)
         self._progress.setVisible(False)
@@ -359,8 +310,7 @@ class DialogPrediksi(QDialog):
         """)
         lay.addWidget(self._progress)
 
-        # ── Tombol prediksi ──
-        self._btn_prediksi = QPushButton("🔮  Jalankan Prediksi")
+        self._btn_prediksi = QPushButton("Jalankan Prediksi")
         self._btn_prediksi.setObjectName("btnPrediksi")
         self._btn_prediksi.clicked.connect(self._run_prediksi)
         lay.addWidget(self._btn_prediksi)
@@ -383,9 +333,8 @@ class DialogPrediksi(QDialog):
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(12)
 
-        # ── Placeholder saat belum ada hasil ──
         self._placeholder = QLabel(
-            "👈  Pilih target prediksi dan klik  🔮 Jalankan Prediksi\n\n"
+            "Pilih target prediksi dan klik: Jalankan Prediksi\n\n"
             "Sistem akan melatih model Machine Learning (Linear Regression & Random Forest)\n"
             "menggunakan data penjualan historis, lalu memproyeksikan revenue ke depan."
         )
@@ -396,7 +345,6 @@ class DialogPrediksi(QDialog):
         )
         lay.addWidget(self._placeholder)
 
-        # ── Konten hasil (tersembunyi awalnya) ──
         self._result_widget = QWidget()
         self._result_widget.setVisible(False)
         res_lay = QVBoxLayout(self._result_widget)
@@ -418,7 +366,7 @@ class DialogPrediksi(QDialog):
         tl.setContentsMargins(4, 4, 4, 4)
         self._canvas_linear = PrediksiCanvas()
         tl.addWidget(self._canvas_linear)
-        self._tabs_chart.addTab(tab_lin, "📈  Linear Regression")
+        self._tabs_chart.addTab(tab_lin, "Linear Regression")
 
         # Tab 2: Random Forest
         tab_rf = QWidget()
@@ -426,7 +374,7 @@ class DialogPrediksi(QDialog):
         tr.setContentsMargins(4, 4, 4, 4)
         self._canvas_rf = PrediksiCanvas()
         tr.addWidget(self._canvas_rf)
-        self._tabs_chart.addTab(tab_rf, "🌳  Random Forest")
+        self._tabs_chart.addTab(tab_rf, "Random Forest")
 
         # Tab 3: Perbandingan
         tab_cmp = QWidget()
@@ -434,11 +382,11 @@ class DialogPrediksi(QDialog):
         tc.setContentsMargins(4, 4, 4, 4)
         self._canvas_cmp = PrediksiCanvas()
         tc.addWidget(self._canvas_cmp)
-        self._tabs_chart.addTab(tab_cmp, "⚖️  Perbandingan Model")
+        self._tabs_chart.addTab(tab_cmp, "Perbandingan Model")
 
         res_lay.addWidget(self._tabs_chart, 3)
 
-        # ── Insight box ──
+        # Insight box
         self._txt_insight = QTextEdit()
         self._txt_insight.setReadOnly(True)
         self._txt_insight.setMaximumHeight(120)
@@ -452,8 +400,8 @@ class DialogPrediksi(QDialog):
         """)
         res_lay.addWidget(self._txt_insight)
 
-        # ── Tabel angka prediksi ──
-        lbl_tbl = QLabel("📋  Tabel Nilai Prediksi")
+        # Tabel angka prediksi
+        lbl_tbl = QLabel("Tabel Nilai Prediksi")
         lbl_tbl.setStyleSheet("font-weight:700;font-size:12px;color:#1e293b;")
         res_lay.addWidget(lbl_tbl)
 
@@ -479,10 +427,7 @@ class DialogPrediksi(QDialog):
         lay.addWidget(self._result_widget, 1)
         return widget
 
-    # ─────────────────────────────────────────────────────────────────────────
     # Slot & logic
-    # ─────────────────────────────────────────────────────────────────────────
-
     def _on_mode_changed(self):
         is_produk = self._radio_produk.isChecked()
         self._combo_produk.setEnabled(is_produk)
@@ -503,12 +448,11 @@ class DialogPrediksi(QDialog):
             QMessageBox.warning(self, "Produk Kosong", "Pilih produk terlebih dahulu.")
             return
 
-        # Tampilkan loading
         self._btn_prediksi.setEnabled(False)
         self._progress.setVisible(True)
         self._placeholder.setVisible(True)
         self._result_widget.setVisible(False)
-        self._placeholder.setText("⏳  Melatih model Machine Learning...\nMohon tunggu sebentar.")
+        self._placeholder.setText("Melatih model Machine Learning...\nMohon tunggu sebentar.")
 
         self._worker = PrediksiWorker(self.orders, mode, nama_produk, n_bulan)
         self._worker.finished.connect(self._on_prediksi_selesai)
@@ -569,19 +513,18 @@ class DialogPrediksi(QDialog):
                     item.setBackground(QColor(bg))
                 self._tabel.setItem(r, c, item)
 
-        # Tandai model rekomendasi di tab
         rek = hasil.rekomendasi_model
         if rek == "Linear Regression":
-            self._tabs_chart.setTabText(0, "📈  Linear Regression  ⭐")
-            self._tabs_chart.setTabText(1, "🌳  Random Forest")
+            self._tabs_chart.setTabText(0, "Linear Regression")
+            self._tabs_chart.setTabText(1, "Random Forest")
         else:
-            self._tabs_chart.setTabText(0, "📈  Linear Regression")
-            self._tabs_chart.setTabText(1, "🌳  Random Forest  ⭐")
+            self._tabs_chart.setTabText(0, "Linear Regression")
+            self._tabs_chart.setTabText(1, "Random Forest")
 
     @Slot(str)
     def _on_prediksi_error(self, msg: str):
         self._progress.setVisible(False)
         self._btn_prediksi.setEnabled(True)
         self._placeholder.setVisible(True)
-        self._placeholder.setText(f"❌  Gagal menjalankan prediksi:\n\n{msg}")
+        self._placeholder.setText(f"Gagal menjalankan prediksi:\n\n{msg}")
         QMessageBox.critical(self, "Error Prediksi ML", f"Terjadi kesalahan:\n\n{msg}")

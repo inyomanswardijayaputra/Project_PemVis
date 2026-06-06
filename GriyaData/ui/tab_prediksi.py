@@ -1,11 +1,3 @@
-"""
-ui/tab_prediksi.py — Tab Prediksi ML
-Fix:
-- Layout pakai QSplitter yang benar dengan ukuran proporsional
-- Chart dan tabel hasil sama-sama keliatan, bisa di-resize
-- R² negatif: kalau test set <= 2, skip scoring pakai fallback
-"""
-
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -22,8 +14,7 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QColor
 
 
-# ─── Worker ───────────────────────────────────────────────────────────────────
-
+# Worker
 class PredictWorker(QThread):
     finished = Signal(object)
     error    = Signal(str)
@@ -48,8 +39,7 @@ class PredictWorker(QThread):
             self.error.emit(str(e))
 
 
-# ─── Chart Canvas ─────────────────────────────────────────────────────────────
-
+# Chart Canvas
 class ForecastCanvas(FigureCanvas):
     def __init__(self):
         self.fig = Figure(facecolor="#ffffff")
@@ -115,8 +105,7 @@ class ForecastCanvas(FigureCanvas):
         self.draw()
 
 
-# ─── Metric Card ─────────────────────────────────────────────────────────────
-
+# Metric Card
 def _metric_card(title, value, sub, color):
     card = QFrame()
     card.setStyleSheet(f"""
@@ -135,8 +124,7 @@ def _metric_card(title, value, sub, color):
     return card
 
 
-# ─── Tab Utama ────────────────────────────────────────────────────────────────
-
+# Tab Utama
 class TabPrediksi(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -150,7 +138,7 @@ class TabPrediksi(QWidget):
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(8)
 
-        # ── Header ────────────────────────────────────────────────────────────
+        # Header
         hdr = QFrame()
         hdr.setStyleSheet("""QFrame{
             background:qlineargradient(x1:0,y1:0,x2:1,y2:0,
@@ -172,7 +160,7 @@ class TabPrediksi(QWidget):
         hl.addWidget(badge)
         root.addWidget(hdr)
 
-        # ── Kontrol ───────────────────────────────────────────────────────────
+        # Kontrol
         ctrl = QFrame()
         ctrl.setStyleSheet(
             "QFrame{background:#fff;border:1px solid #e5e7eb;border-radius:8px;}")
@@ -181,7 +169,7 @@ class TabPrediksi(QWidget):
 
         cl.addWidget(QLabel("Mode:"))
         self.combo_mode = QComboBox(); self.combo_mode.setObjectName("inputField")
-        self.combo_mode.addItems(["📦  Semua Produk", "🔍  Per Produk"])
+        self.combo_mode.addItems(["Semua Produk", "Per Produk"])
         self.combo_mode.setMinimumWidth(150)
         self.combo_mode.currentIndexChanged.connect(self._on_mode_changed)
         cl.addWidget(self.combo_mode)
@@ -194,7 +182,7 @@ class TabPrediksi(QWidget):
 
         cl.addWidget(QLabel("Horizon:"))
         self.combo_horizon = QComboBox(); self.combo_horizon.setObjectName("inputField")
-        self.combo_horizon.addItems(["📅  Bulanan", "📆  Mingguan"])
+        self.combo_horizon.addItems(["Bulanan", "Mingguan"])
         self.combo_horizon.setMinimumWidth(120)
         cl.addWidget(self.combo_horizon)
 
@@ -205,14 +193,14 @@ class TabPrediksi(QWidget):
         cl.addWidget(self.spin_periods)
 
         cl.addStretch()
-        self.btn_predict = QPushButton("🚀  Jalankan Prediksi")
+        self.btn_predict = QPushButton("Jalankan Prediksi")
         self.btn_predict.setObjectName("btnPrimary")
         self.btn_predict.setMinimumWidth(160)
         self.btn_predict.clicked.connect(self._run_prediction)
         cl.addWidget(self.btn_predict)
         root.addWidget(ctrl)
 
-        # ── Metric cards ──────────────────────────────────────────────────────
+        # Metric cards
         mw = QWidget(); ml = QHBoxLayout(mw)
         ml.setContentsMargins(0, 0, 0, 0); ml.setSpacing(8)
         self._c_r2   = _metric_card("R² Score",  "—", "Akurasi model",       "#3b82f6")
@@ -224,8 +212,6 @@ class TabPrediksi(QWidget):
             ml.addWidget(c)
         root.addWidget(mw)
 
-        # ── Splitter: chart (atas) | tabel (bawah) ────────────────────────────
-        # Pakai splitter yang bisa di-drag user, ukuran awal 60/40
         splitter = QSplitter(Qt.Vertical)
         splitter.setChildrenCollapsible(False)
         splitter.setHandleWidth(6)
@@ -242,7 +228,7 @@ class TabPrediksi(QWidget):
         tbl_wrap = QWidget()
         tw_lay = QVBoxLayout(tbl_wrap)
         tw_lay.setContentsMargins(0, 4, 0, 0); tw_lay.setSpacing(4)
-        lbl_t = QLabel("📋  Hasil Prediksi")
+        lbl_t = QLabel("Hasil Prediksi")
         lbl_t.setStyleSheet("font-size:11px;font-weight:700;color:#374151;")
         tw_lay.addWidget(lbl_t)
         self.tbl_result = QTableWidget()
@@ -260,14 +246,13 @@ class TabPrediksi(QWidget):
         tw_lay.addWidget(self.tbl_result)
         splitter.addWidget(tbl_wrap)
 
-        # Ukuran awal: chart 58% | tabel 42% dari sisa tinggi
-        splitter.setSizes([999, 999])   # sama dulu, nanti di-stretch
+        splitter.setSizes([999, 999])   
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
 
         root.addWidget(splitter, 1)
 
-        # ── Status bar ────────────────────────────────────────────────────────
+        # Status bar
         sb = QFrame()
         sb.setFixedHeight(28)
         sb.setStyleSheet("background:#f1f5f9;border-radius:5px;")
@@ -281,21 +266,19 @@ class TabPrediksi(QWidget):
         sl.addWidget(self.progress)
         root.addWidget(sb)
 
-    # ─── Data ─────────────────────────────────────────────────────────────────
-
+    # Data 
     def load_orders(self, orders: list):
         try:
             from ml.predictor import SalesPredictor
         except ImportError:
-            from predictor import SalesPredictor
+            from ml.predictor import SalesPredictor
         self._predictor = SalesPredictor(orders)
         prods = self._predictor.get_product_list()
         self.combo_produk.clear()
         self.combo_produk.addItems(prods)
-        self.lbl_status.setText(f"  ✅  {len(orders)} pesanan dimuat. Model siap dilatih.")
+        self.lbl_status.setText(f"{len(orders)} pesanan dimuat. Model siap dilatih.")
 
-    # ─── Slots ────────────────────────────────────────────────────────────────
-
+    # Slots 
     @Slot(int)
     def _on_mode_changed(self, idx):
         show = (idx == 1)
@@ -316,7 +299,7 @@ class TabPrediksi(QWidget):
 
         self.btn_predict.setEnabled(False)
         self.progress.setVisible(True)
-        self.lbl_status.setText("  🔄  Melatih model Random Forest...")
+        self.lbl_status.setText("Melatih model Random Forest...")
         self._worker = PredictWorker(self._predictor, mode, product, horizon, n)
         self._worker.finished.connect(self._on_done)
         self._worker.error.connect(self._on_err)
@@ -334,18 +317,17 @@ class TabPrediksi(QWidget):
         self._canvas.plot_forecast(report)
         h = "Mingguan" if report.horizon == "weekly" else "Bulanan"
         self.lbl_status.setText(
-            f"  ✅  {report.product_name}  |  {h}  |  {report.n_periods} periode  |  "
+            f"{report.product_name}  |  {h}  |  {report.n_periods} periode  |  "
             f"R²={report.metrics.r2:.3f}  |  Train:{report.metrics.n_train} periode")
 
     @Slot(str)
     def _on_err(self, msg):
         self.btn_predict.setEnabled(True)
         self.progress.setVisible(False)
-        self.lbl_status.setText(f"  ❌  {msg}")
+        self.lbl_status.setText(f"{msg}")
         QMessageBox.critical(self, "Prediksi Gagal", msg)
 
-    # ─── Updaters ─────────────────────────────────────────────────────────────
-
+    #Updaters 
     def _update_metrics(self, m):
         def _s(card, val, sub=None):
             lbl = card.findChild(QLabel, "__mv")

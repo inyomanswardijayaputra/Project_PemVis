@@ -1,8 +1,3 @@
-"""
-ui/dialog_order.py
-Dialog Tambah Pesanan — semua kolom lengkap sesuai tabel orders
-"""
-
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox,
@@ -55,7 +50,7 @@ class DialogOrder(QDialog):
         h.addWidget(t); h.addWidget(s)
         root.addWidget(hdr)
 
-        # Scroll area untuk form
+        # Scroll area
         scroll = QScrollArea(); scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         body = QWidget()
@@ -73,7 +68,6 @@ class DialogOrder(QDialog):
             w = QComboBox(); w.setObjectName("inputField")
             w.addItems(items); return w
 
-        # ── Identitas Pesanan ─────────────────────────────────────────────────
         self._section(form, "── Identitas Pesanan ──")
 
         self.inp_order_id = inp("e.g. ORD00001  (kosongkan = auto)")
@@ -89,7 +83,6 @@ class DialogOrder(QDialog):
         self.inp_channel = cmb(CHANNEL_LIST)
         form.addRow("Sales Channel *", self.inp_channel)
 
-        # ── Data Pelanggan ────────────────────────────────────────────────────
         self._section(form, "── Data Pelanggan ──")
 
         self.inp_nama = inp("Nama pelanggan...")
@@ -104,7 +97,6 @@ class DialogOrder(QDialog):
         self.inp_address = inp("Alamat lengkap pengiriman...")
         form.addRow("Shipping Address", self.inp_address)
 
-        # ── Produk & Harga ────────────────────────────────────────────────────
         self._section(form, "── Produk & Harga ──")
 
         self.inp_produk = QComboBox(); self.inp_produk.setObjectName("inputField")
@@ -128,7 +120,7 @@ class DialogOrder(QDialog):
         self.inp_shipping.setPrefix("Rp "); self.inp_shipping.setValue(0)
         form.addRow("Shipping Fee (Rp)", self.inp_shipping)
 
-        # Total & Total Sales (auto)
+        # Total & Total Sales 
         self.inp_total = QDoubleSpinBox(); self.inp_total.setObjectName("inputField")
         self.inp_total.setRange(0, 999_999_999); self.inp_total.setDecimals(0)
         self.inp_total.setPrefix("Rp "); self.inp_total.setReadOnly(True)
@@ -141,7 +133,6 @@ class DialogOrder(QDialog):
         self.inp_total_sales.setToolTip("Auto: Total + Shipping Fee")
         form.addRow("Total Sales (auto)", self.inp_total_sales)
 
-        # ── Pengiriman & Status ───────────────────────────────────────────────
         self._section(form, "── Pengiriman & Status ──")
 
         self.inp_courier = cmb(COURIER_LIST)

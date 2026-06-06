@@ -22,7 +22,6 @@ class LoginWindow(QMainWindow):
         outer_layout.setAlignment(Qt.AlignCenter)
         outer_layout.setContentsMargins(30, 30, 30, 30)
         
-        # Card putih
         card = QWidget()
         card.setStyleSheet("""
             QWidget#card {
@@ -37,7 +36,6 @@ class LoginWindow(QMainWindow):
         card_layout.setContentsMargins(0, 0, 0, 40)
         card_layout.setSpacing(0)
         
-        # Header biru solid — judul diperbesar
         header = QLabel("GRIYADATA", card)
         header.setAlignment(Qt.AlignCenter)
         
@@ -107,7 +105,6 @@ class LoginWindow(QMainWindow):
         form_layout.addWidget(self.password_input)
         form_layout.addSpacing(24)
         
-        # Tombol Login
         self.login_button = QPushButton("Masuk Ke Sistem")
         self.login_button.setFont(QFont("Arial", 12, QFont.Bold))
         self.login_button.setCursor(Qt.PointingHandCursor)

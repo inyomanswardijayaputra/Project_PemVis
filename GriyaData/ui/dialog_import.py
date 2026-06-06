@@ -1,12 +1,3 @@
-"""
-ui/dialog_import.py — Import CSV/Excel ke GriyaData (schema baru)
-Logic:
-  1. Baca file
-  2. Auto-detect mapping 20 kolom → field DB
-  3. Tiap baris: cek produk di products, kalau baru → POST /api/products
-  4. Bulk insert ke /api/orders/bulk dengan semua kolom lengkap
-"""
-
 import os
 import requests
 import pandas as pd
@@ -24,8 +15,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from core.api_handler import APIHandler, ProductRecord
 
 
-# ─── Auto-detect mapping ──────────────────────────────────────────────────────
-# "nama_kolom_di_file_lowercase" → "field_internal"
+# Auto-detect mapping
 AUTO_MAP = {
     "sales_date": "sales_date", "order_date": "sales_date",
     "tanggal": "sales_date", "date": "sales_date",
@@ -52,14 +42,13 @@ AUTO_MAP = {
     "customer_rating": "customer_rating", "rating": "customer_rating",
 }
 
-# Wajib (4 kolom utama)
 REQUIRED_FIELDS = [
     ("customer_name", "Nama Pelanggan *"),
     ("product_name",  "Nama Produk *"),
     ("quantity",      "Jumlah (qty) *"),
     ("total_sales",   "Total Sales *"),
 ]
-# Opsional (sisanya)
+
 OPTIONAL_FIELDS = [
     ("sales_date",             "Sales Date"),
     ("order_id",               "Order ID"),
@@ -88,8 +77,7 @@ STATUS_NORM = {
 }
 
 
-# ─── Background insert worker ─────────────────────────────────────────────────
-
+# Background insert worker
 class InsertWorker(QThread):
     progress = Signal(int)
     finished = Signal(dict)
@@ -119,8 +107,7 @@ class InsertWorker(QThread):
             self.error.emit(str(e))
 
 
-# ─── Dialog ───────────────────────────────────────────────────────────────────
-
+# Dialog
 class DialogImport(QDialog):
     def __init__(self, parent=None, api: APIHandler = None):
         super().__init__(parent)
@@ -155,11 +142,10 @@ class DialogImport(QDialog):
         wrap = QWidget()
         body = QVBoxLayout(wrap); body.setContentsMargins(20,16,20,8); body.setSpacing(14)
 
-        # Step 1
         s1 = QFrame()
         s1.setStyleSheet("QFrame{background:#f0f9ff;border:1.5px solid #bfdbfe;border-radius:8px;}")
         l1 = QHBoxLayout(s1); l1.setContentsMargins(16,12,16,12); l1.setSpacing(12)
-        lbl_s = QLabel("📂  Pilih file CSV atau Excel (.xlsx / .xls)")
+        lbl_s = QLabel("Pilih file CSV atau Excel (.xlsx / .xls)")
         lbl_s.setStyleSheet("font-weight:600;color:#1d4ed8;font-size:12px;")
         l1.addWidget(lbl_s, 1)
         self.lbl_file = QLabel("Belum ada file dipilih")
@@ -171,20 +157,18 @@ class DialogImport(QDialog):
         l1.addWidget(btn_br)
         body.addWidget(s1)
 
-        # Step 2: mapping
         self.frame_map = QFrame()
         self.frame_map.setStyleSheet(
             "QFrame{background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;}")
         self.frame_map.setVisible(False)
         mo = QVBoxLayout(self.frame_map); mo.setContentsMargins(16,12,16,14); mo.setSpacing(8)
-        lbl_m = QLabel("🔗  Mapping Kolom  —  4 kolom WAJIB + 16 opsional (auto-detect)")
+        lbl_m = QLabel("Mapping Kolom  —  4 kolom WAJIB + 16 opsional (auto-detect)")
         lbl_m.setStyleSheet("font-weight:600;color:#92400e;font-size:12px;")
         mo.addWidget(lbl_m)
-        hint = QLabel("ℹ️  Kolom opsional yang tidak dipakai → nilai default. "
+        hint = QLabel("Kolom opsional yang tidak dipakai → nilai default. "
                       "Kolom banyak? Scroll ke bawah untuk lihat semua.")
         hint.setStyleSheet("color:#78350f;font-size:10px;"); hint.setWordWrap(True)
         mo.addWidget(hint)
-        # grid 2 pasang per baris
         self.grid_map = QGridLayout(); self.grid_map.setSpacing(6)
         self.grid_map.setColumnStretch(1, 1); self.grid_map.setColumnStretch(3, 1)
         mo.addLayout(self.grid_map)
@@ -194,7 +178,6 @@ class DialogImport(QDialog):
         mo.addWidget(self.chk_auto)
         body.addWidget(self.frame_map)
 
-        # Step 3: preview
         lbl_pv = QLabel("Preview Data (20 baris pertama):")
         lbl_pv.setStyleSheet("font-weight:600;color:#374151;font-size:11px;")
         body.addWidget(lbl_pv)
@@ -221,12 +204,12 @@ class DialogImport(QDialog):
         f = QHBoxLayout(footer); f.setContentsMargins(24,12,24,12); f.addStretch()
         btn_batal = QPushButton("Batal"); btn_batal.setObjectName("btnSecondary")
         btn_batal.clicked.connect(self.reject); f.addWidget(btn_batal)
-        self.btn_imp = QPushButton("⬆️  Import ke Database")
+        self.btn_imp = QPushButton("Import ke Database")
         self.btn_imp.setObjectName("btnPrimary"); self.btn_imp.setEnabled(False)
         self.btn_imp.clicked.connect(self._start_import); f.addWidget(self.btn_imp)
         root.addWidget(footer)
 
-    # ── File ──────────────────────────────────────────────────────────────────
+    # File
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Pilih File", os.path.expanduser("~"),
@@ -246,7 +229,7 @@ class DialogImport(QDialog):
         self._refresh_preview()
         self.btn_imp.setEnabled(True)
 
-    # ── Mapping ───────────────────────────────────────────────────────────────
+    # Mapping
     def _auto_detect(self, field, columns):
         for col in columns:
             if AUTO_MAP.get(col.lower().strip().replace(" ","_")) == field:
@@ -293,7 +276,7 @@ class DialogImport(QDialog):
 
         self.frame_map.setVisible(True)
 
-    # ── Preview ───────────────────────────────────────────────────────────────
+    # Preview 
     def _refresh_preview(self):
         if self._df is None: return
         df = self._df.head(20)
@@ -309,12 +292,11 @@ class DialogImport(QDialog):
         self.lbl_info.setText(
             f"  {len(self._df):,} baris  •  preview 20 baris  •  {len(self._df.columns)} kolom")
 
-    # ── Import ────────────────────────────────────────────────────────────────
+    # Import
     def _start_import(self):
         if self._df is None: return
         mapping = {f: self._col_combos[f].currentText() for f in self._col_combos}
 
-        # Cek field wajib
         missing = [lbl for f,lbl in REQUIRED_FIELDS
                    if mapping.get(f,"-- Tidak Dipakai --") == "-- Tidak Dipakai --"]
         if missing:
@@ -322,7 +304,6 @@ class DialogImport(QDialog):
                                 "Mapping dulu field ini:\n• " + "\n• ".join(missing))
             return
 
-        # Product map
         product_map = {p.product_name.lower().strip(): p.id for p in self._products}
         auto_create = self.chk_auto.isChecked()
         orders_ready, skipped, new_prod_count = [], [], 0
@@ -351,7 +332,7 @@ class DialogImport(QDialog):
                 qty   = int(float(qty_raw))
                 tsale = float(str(ts_raw).replace(",","").replace(" ",""))
 
-                # ── cek / buat produk ────────────────────────────────────────
+                # cek / buat produk
                 key = pname.lower()
                 pid = product_map.get(key)
                 if pid is None:
@@ -375,7 +356,6 @@ class DialogImport(QDialog):
                     except Exception as e:
                         skipped.append(f"Baris {rn}: error produk '{pname}': {e}"); continue
 
-                # ── kolom opsional ───────────────────────────────────────────
                 def safe_float(f, d=0.0):
                     v = get_val(f)
                     try: return float(str(v).replace(",","")) if v is not None else d
@@ -391,14 +371,12 @@ class DialogImport(QDialog):
                     s = str(v).strip() if v is not None else ""
                     return s if s not in ("nan","None","") else d
 
-                # tanggal
                 sd_raw = get_val("sales_date")
                 sales_date_str = None
                 if sd_raw is not None:
                     try: sales_date_str = pd.to_datetime(str(sd_raw)).isoformat()
                     except: pass
 
-                # status normalisasi
                 status_raw = safe_str("status", "Pending").lower()
                 status = STATUS_NORM.get(status_raw, "Pending")
 
@@ -434,7 +412,7 @@ class DialogImport(QDialog):
             if skipped: msg += "\n\nContoh masalah:\n" + "\n".join(skipped[:8])
             QMessageBox.warning(self, "Tidak Ada Data Valid", msg); return
 
-        prod_info = f"\n✅ {new_prod_count} produk baru ditambahkan ke tabel products." \
+        prod_info = f"\n{new_prod_count} produk baru ditambahkan ke tabel products." \
                     if new_prod_count else ""
         konfirm = (f"Siap import {len(orders_ready):,} pesanan.\n"
                    f"{len(skipped):,} baris dilewati.{prod_info}\n\nLanjutkan?")
@@ -455,7 +433,7 @@ class DialogImport(QDialog):
 
     def _on_done(self, res):
         self.progress.setValue(100); self.btn_imp.setEnabled(True)
-        msg = (f"✅  Import selesai!\n\n"
+        msg = (f"Import selesai!\n\n"
                f"  Berhasil : {res['inserted']:,} pesanan\n"
                f"  Dilewati : {res['skipped']:,} baris\n")
         if res.get("errors"):
