@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 
 from utils import Formatter
-from api_handler import APIHandler, ProductRecord
+from core.api_handler import APIHandler, ProductRecord
 
 
 # ─── Mapping kolom yang dikenali otomatis ─────────────────────────────────────
