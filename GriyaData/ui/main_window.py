@@ -1,63 +1,117 @@
 """
-ui/main_window.py
-Dashboard utama GriyaData — Penjualan Produk Miniatur
-Terinspirasi dari Week12 Online Sales Dashboard, diadaptasi untuk
-berkomunikasi dengan REST API FastAPI (Supabase backend).
+ui/main_window.py — GriyaData Dashboard (schema baru 20 kolom)
+Tabs: Dashboard | Data Pesanan | Produk | Prediksi ML
 """
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QPushButton, QLabel, QFrame, QComboBox, QDialog,
-    QMessageBox, QSizePolicy, QStatusBar,
+    QMessageBox, QSizePolicy, QLineEdit, QFormLayout,
+    QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, Slot, QThread, Signal
 from PySide6.QtGui import QAction, QColor
 
-from api_handler import APIHandler, OrderRecord
-from utils import Formatter, STATUS_PESANAN, METODE_PEMBAYARAN, STATUS_COLORS
+from core.api_handler import APIHandler, OrderRecord, ProductRecord
+from utils import Formatter
 from ui.chart_widget import ChartWidget
 from ui.dialog_order import DialogOrder
 from ui.dialog_import import DialogImport
+from ui.tab_prediksi import TabPrediksi
 
-NAMA        = "GriyaData"
-APP_TITLE   = "GriyaData — Manajemen Penjualan Miniatur"
+APP_TITLE = "GriyaData — Manajemen Penjualan"
+
+STATUS_LIST  = ["All","Pending","Diproses","Dikirim","Selesai","Dibatalkan"]
+CHANNEL_LIST = ["All","Shopee","Tokopedia","Lazada","TikTok Shop","Website","Offline"]
 
 
-# ─── Background loader thread ─────────────────────────────────────────────────
-
+# ─── Background loader ────────────────────────────────────────────────────────
 class DataLoader(QThread):
-    """Memuat data dari API di background agar UI tidak freeze."""
     finished = Signal(list)
     error    = Signal(str)
-
-    def __init__(self, api: APIHandler, status: str, metode: str):
+    def __init__(self, api, status, channel):
         super().__init__()
-        self.api    = api
-        self.status = status
-        self.metode = metode
-
+        self.api = api; self.status = status; self.channel = channel
     def run(self):
         try:
-            orders = self.api.get_all_orders(self.status, self.metode)
-            self.finished.emit(orders)
+            self.finished.emit(self.api.get_all_orders(self.status, self.channel))
         except Exception as e:
             self.error.emit(str(e))
 
 
-# ─── Main Window ──────────────────────────────────────────────────────────────
+# ─── Dialog Tambah/Edit Produk ────────────────────────────────────────────────
+class DialogProduk(QDialog):
+    def __init__(self, parent=None, product: ProductRecord = None):
+        super().__init__(parent)
+        self.setWindowTitle("Tambah Produk" if product is None else "Edit Produk")
+        self.setMinimumWidth(360)
+        self.setObjectName("dialogSales")
+        self._build(product)
 
+    def _build(self, p):
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 20, 24, 16); lay.setSpacing(14)
+
+        title = QLabel("Tambah Produk Baru" if p is None else f"Edit Produk ID {p.id}")
+        title.setObjectName("dialogTitle")
+        lay.addWidget(title)
+
+        form = QFormLayout(); form.setSpacing(10)
+        self.inp_name = QLineEdit(p.product_name if p else "")
+        self.inp_name.setObjectName("inputField")
+        self.inp_name.setPlaceholderText("e.g. Gundam RX-78")
+        self.inp_cat  = QLineEdit(p.category if p else "")
+        self.inp_cat.setObjectName("inputField")
+        self.inp_cat.setPlaceholderText("e.g. Miniatur")
+        self.inp_price = QLineEdit(str(p.price) if p else "")
+        self.inp_price.setObjectName("inputField")
+        self.inp_price.setPlaceholderText("e.g. 150000")
+
+        form.addRow("Nama Produk *", self.inp_name)
+        form.addRow("Category *",    self.inp_cat)
+        form.addRow("Price *",       self.inp_price)
+        lay.addLayout(form)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.button(QDialogButtonBox.Ok).setText("Simpan")
+        btns.button(QDialogButtonBox.Ok).setObjectName("btnPrimary")
+        btns.button(QDialogButtonBox.Cancel).setObjectName("btnSecondary")
+        btns.accepted.connect(self._validate)
+        btns.rejected.connect(self.reject)
+        lay.addWidget(btns)
+
+    def _validate(self):
+        if not self.inp_name.text().strip():
+            QMessageBox.warning(self, "Input Kurang", "Nama produk tidak boleh kosong."); return
+        if not self.inp_cat.text().strip():
+            QMessageBox.warning(self, "Input Kurang", "Category tidak boleh kosong."); return
+        try:
+            float(self.inp_price.text().replace(",",""))
+        except ValueError:
+            QMessageBox.warning(self, "Input Salah", "Price harus berupa angka."); return
+        self.accept()
+
+    def get_data(self) -> dict:
+        return {
+            "product_name": self.inp_name.text().strip(),
+            "category":     self.inp_cat.text().strip(),
+            "price":        float(self.inp_price.text().replace(",","").strip()),
+        }
+
+
+# ─── Main Window ──────────────────────────────────────────────────────────────
 class MainWindow(QMainWindow):
-    def __init__(self, username: str = "Admin"):
+    def __init__(self, username="Admin"):
         super().__init__()
         self.username = username
         self.setWindowTitle(APP_TITLE)
-        self.setMinimumSize(1200, 720)
-        self.resize(1400, 820)
+        self.setMinimumSize(1280, 760)
+        self.resize(1480, 860)
 
         self.api = APIHandler()
         self._orders: list[OrderRecord] = []
-        self._loader: DataLoader | None = None
+        self._loader = None
 
         self._build_menu()
         self._build_ui()
@@ -65,444 +119,404 @@ class MainWindow(QMainWindow):
         self.refresh_all()
 
     # ─── Menu ─────────────────────────────────────────────────────────────────
-
     def _build_menu(self):
-        mb = self.menuBar()
-        mb.setObjectName("menuBar")
-
+        mb = self.menuBar(); mb.setObjectName("menuBar")
         mf = mb.addMenu("&File")
-        a_refresh = QAction("🔄  Refresh Data", self)
-        a_refresh.setShortcut("F5")
-        a_refresh.triggered.connect(self.refresh_all)
-        mf.addAction(a_refresh)
-        mf.addSeparator()
-        a_logout = QAction("Logout", self)
-        a_logout.setShortcut("Ctrl+L")
-        a_logout.triggered.connect(self._logout)
-        mf.addAction(a_logout)
-        a_quit = QAction("Keluar", self)
-        a_quit.setShortcut("Ctrl+Q")
-        a_quit.triggered.connect(self.close)
-        mf.addAction(a_quit)
-
+        for label, shortcut, slot in [
+            ("🔄  Refresh Data",         "F5",    self.refresh_all),
+            ("Logout",                    "Ctrl+L", self._logout),
+            ("Keluar",                    "Ctrl+Q", self.close),
+        ]:
+            a = QAction(label, self); a.setShortcut(shortcut)
+            a.triggered.connect(slot); mf.addAction(a)
         md = mb.addMenu("&Pesanan")
-        a_add = QAction("Tambah Pesanan", self)
-        a_add.setShortcut("Ctrl+N")
-        a_add.triggered.connect(self._tambah)
-        md.addAction(a_add)
-
-        a_edit = QAction("Edit Status Pesanan", self)
-        a_edit.setShortcut("Ctrl+E")
-        a_edit.triggered.connect(self._edit)
-        md.addAction(a_edit)
-
-        a_del = QAction("Hapus Pesanan", self)
-        a_del.setShortcut("Delete")
-        a_del.triggered.connect(self._hapus)
-        md.addAction(a_del)
-        md.addSeparator()
-        a_import = QAction("📥  Import dari CSV / Excel", self)
-        a_import.setShortcut("Ctrl+I")
-        a_import.triggered.connect(self._import_file)
-        md.addAction(a_import)
+        for label, shortcut, slot in [
+            ("Tambah Pesanan",            "Ctrl+N", self._tambah_order),
+            ("Edit Pesanan",              "Ctrl+E", self._edit_order),
+            ("Hapus Pesanan",             "Delete", self._hapus_order),
+            ("📥  Import CSV/Excel",      "Ctrl+I", self._import_file),
+        ]:
+            a = QAction(label, self); a.setShortcut(shortcut)
+            a.triggered.connect(slot); md.addAction(a)
 
     # ─── Layout ───────────────────────────────────────────────────────────────
-
     def _build_ui(self):
-        central = QWidget()
-        central.setObjectName("mainContainer")
+        central = QWidget(); central.setObjectName("mainContainer")
         self.setCentralWidget(central)
-
         root = QVBoxLayout(central)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
+        root.setContentsMargins(0,0,0,0); root.setSpacing(0)
         root.addWidget(self._make_banner())
-
-        self.tabs = QTabWidget()
-        self.tabs.setObjectName("mainTabs")
+        self.tabs = QTabWidget(); self.tabs.setObjectName("mainTabs")
         root.addWidget(self.tabs, 1)
-
         self._build_tab_dashboard()
-        self._build_tab_table()
+        self._build_tab_orders()
+        self._build_tab_products()
+        self._build_tab_prediksi()
 
-    def _make_banner(self) -> QFrame:
-        banner = QFrame()
-        banner.setObjectName("banner")
-        lay = QHBoxLayout(banner)
-        lay.setContentsMargins(20, 12, 20, 12)
-
-        lbl_app = QLabel("🎌  GriyaData — Penjualan Miniatur")
-        lbl_app.setObjectName("bannerApp")
-        lbl_app.setStyleSheet("font-size:19px;font-weight:700;color:#1a1a1a;")
-        lay.addWidget(lbl_app)
-        lay.addStretch()
-
-        frame_id = QFrame()
-        frame_id.setObjectName("frameIdentitas")
-        id_lay = QHBoxLayout(frame_id)
-        id_lay.setContentsMargins(14, 6, 14, 6)
-        id_lay.setSpacing(16)
-
-        lbl_user = QLabel(f"👤  {self.username}")
-        lbl_user.setObjectName("bannerIdentitas")
-        lbl_api = QLabel("🔗 API: griyadataapi")
-        lbl_api.setObjectName("bannerNIM")
-
-        id_lay.addWidget(lbl_user)
-        id_lay.addWidget(lbl_api)
-        lay.addWidget(frame_id)
-        return banner
+    def _make_banner(self):
+        b = QFrame(); b.setObjectName("banner")
+        lay = QHBoxLayout(b); lay.setContentsMargins(20,12,20,12)
+        lbl = QLabel("🎌  GriyaData — Penjualan Miniatur")
+        lbl.setObjectName("bannerApp")
+        lbl.setStyleSheet("font-size:19px;font-weight:700;color:#1a1a1a;")
+        lay.addWidget(lbl); lay.addStretch()
+        fr = QFrame(); fr.setObjectName("frameIdentitas")
+        il = QHBoxLayout(fr); il.setContentsMargins(14,6,14,6); il.setSpacing(16)
+        il.addWidget(QLabel(f"👤  {self.username}"))
+        il.addWidget(QLabel("🔗 API: griyadataapi"))
+        lay.addWidget(fr)
+        return b
 
     # ─── Tab Dashboard ────────────────────────────────────────────────────────
-
     def _build_tab_dashboard(self):
-        tab = QWidget()
-        tab.setObjectName("tabDashboard")
-        root = QVBoxLayout(tab)
-        root.setContentsMargins(20, 16, 20, 16)
-        root.setSpacing(16)
-
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(12)
-
-        self._card_tx    = self._make_stat_card("Total Pesanan",    "—", "#3b82f6")
-        self._card_rev   = self._make_stat_card("Total Revenue",    "—", "#10b981")
-        self._card_avg   = self._make_stat_card("Rata-rata / Order","—", "#f59e0b")
-        self._card_units = self._make_stat_card("Total Unit Terjual","—", "#8b5cf6")
-
+        tab = QWidget(); tab.setObjectName("tabDashboard")
+        root = QVBoxLayout(tab); root.setContentsMargins(20,16,20,16); root.setSpacing(16)
+        cl = QHBoxLayout(); cl.setSpacing(12)
+        self._card_tx    = self._stat_card("Total Pesanan",      "—", "#3b82f6")
+        self._card_rev   = self._stat_card("Total Sales",        "—", "#10b981")
+        self._card_avg   = self._stat_card("Rata-rata / Order",  "—", "#f59e0b")
+        self._card_units = self._stat_card("Total Unit Terjual", "—", "#8b5cf6")
         for c in (self._card_tx, self._card_rev, self._card_avg, self._card_units):
-            cards_layout.addWidget(c)
-
-        root.addLayout(cards_layout)
-
+            cl.addWidget(c)
+        root.addLayout(cl)
         self._dash_chart = ChartWidget()
-        self._dash_chart.combo_chart.setCurrentIndex(2)  # Trend per Bulan default
+        self._dash_chart.combo_chart.setCurrentIndex(2)
         root.addWidget(self._dash_chart, 1)
-
         self.tabs.addTab(tab, "📊  Dashboard")
 
-    def _make_stat_card(self, title: str, value: str, color: str) -> QFrame:
-        card = QFrame()
-        card.setObjectName("statCard")
+    def _stat_card(self, title, value, color):
+        card = QFrame(); card.setObjectName("statCard")
         card.setStyleSheet("""
-            #statCard {
-                background: #ffffff;
-                border: 1.5px solid #e5e7eb;
-                border-radius: 10px;
-            }
-            #statCard:hover { border-color: #bfdbfe; }
-        """)
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(18, 14, 18, 14)
-        lay.setSpacing(4)
-
-        lbl_val = QLabel(value)
-        lbl_val.setStyleSheet(f"font-size:24px;font-weight:700;color:{color};")
-        lbl_val.setObjectName("cardVal")
-
-        lbl_tit = QLabel(title)
-        lbl_tit.setStyleSheet("font-size:11px;color:#6b7280;font-weight:600;letter-spacing:0.3px;")
-
-        lay.addWidget(lbl_val)
-        lay.addWidget(lbl_tit)
+            #statCard{background:#ffffff;border:1.5px solid #e5e7eb;border-radius:10px;}
+            #statCard:hover{border-color:#bfdbfe;}""")
+        lay = QVBoxLayout(card); lay.setContentsMargins(18,14,18,14); lay.setSpacing(4)
+        lv = QLabel(value); lv.setStyleSheet(f"font-size:24px;font-weight:700;color:{color};")
+        lv.setObjectName("cardVal")
+        lt = QLabel(title); lt.setStyleSheet("font-size:11px;color:#6b7280;font-weight:600;")
+        lay.addWidget(lv); lay.addWidget(lt)
         return card
 
-    def _update_stat_card(self, card: QFrame, value: str):
+    def _set_card(self, card, val):
         lbl = card.findChild(QLabel, "cardVal")
-        if lbl:
-            lbl.setText(value)
+        if lbl: lbl.setText(val)
 
-    # ─── Tab Tabel Pesanan ────────────────────────────────────────────────────
+    # ─── Tab Data Pesanan ─────────────────────────────────────────────────────
+    def _build_tab_orders(self):
+        tab = QWidget(); tab.setObjectName("tabTable")
+        root = QVBoxLayout(tab); root.setContentsMargins(16,14,16,14); root.setSpacing(8)
 
-    def _build_tab_table(self):
-        tab = QWidget()
-        tab.setObjectName("tabTable")
-        root = QVBoxLayout(tab)
-        root.setContentsMargins(16, 14, 16, 14)
-        root.setSpacing(8)
-
-        filter_bar = QHBoxLayout()
-        filter_bar.setSpacing(8)
-
+        # Filter bar
+        fb = QHBoxLayout(); fb.setSpacing(8)
         for label, attr, items in [
-            ("Status:",  "f_status", ["All"] + STATUS_PESANAN),
-            ("Metode:",  "f_metode", ["All"] + METODE_PEMBAYARAN),
+            ("Status:",  "f_status",  STATUS_LIST),
+            ("Channel:", "f_channel", CHANNEL_LIST),
         ]:
-            lbl = QLabel(label)
-            lbl.setObjectName("panelSubinfo")
+            lbl = QLabel(label); lbl.setObjectName("panelSubinfo")
             lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-            combo = QComboBox()
-            combo.setObjectName("inputField")
-            combo.setMinimumWidth(110)
-            combo.setMaximumWidth(160)
-            combo.addItems(items)
-            combo.currentTextChanged.connect(self._on_filter_changed)
-            setattr(self, attr, combo)
-            filter_bar.addWidget(lbl)
-            filter_bar.addWidget(combo)
-            filter_bar.addSpacing(12)
+            cb = QComboBox(); cb.setObjectName("inputField")
+            cb.setMinimumWidth(120); cb.setMaximumWidth(160)
+            cb.addItems(items)
+            cb.currentTextChanged.connect(self._on_filter_changed)
+            setattr(self, attr, cb)
+            fb.addWidget(lbl); fb.addWidget(cb); fb.addSpacing(12)
 
-        btn_refresh = QPushButton("🔄")
-        btn_refresh.setObjectName("btnRefresh")
-        btn_refresh.setFixedWidth(36)
-        btn_refresh.clicked.connect(self.refresh_all)
-        filter_bar.addWidget(btn_refresh)
+        btn_ref = QPushButton("🔄"); btn_ref.setObjectName("btnRefresh")
+        btn_ref.setFixedWidth(36); btn_ref.clicked.connect(self.refresh_all)
+        fb.addWidget(btn_ref); fb.addStretch()
 
-        filter_bar.addStretch()
+        btn_add = QPushButton("➕  Tambah"); btn_add.setObjectName("btnPrimary")
+        btn_add.clicked.connect(self._tambah_order); fb.addWidget(btn_add)
+        self.btn_edit = QPushButton("✏️  Edit Pesanan"); self.btn_edit.setObjectName("btnSecondary")
+        self.btn_edit.setEnabled(False); self.btn_edit.clicked.connect(self._edit_order)
+        fb.addWidget(self.btn_edit)
+        self.btn_del = QPushButton("🗑️  Hapus"); self.btn_del.setObjectName("btnDanger")
+        self.btn_del.setEnabled(False); self.btn_del.clicked.connect(self._hapus_order)
+        fb.addWidget(self.btn_del)
+        btn_imp = QPushButton("📥  Import File"); btn_imp.setObjectName("btnSecondary")
+        btn_imp.clicked.connect(self._import_file); fb.addWidget(btn_imp)
+        root.addLayout(fb)
 
-        btn_add = QPushButton("➕  Tambah")
-        btn_add.setObjectName("btnPrimary")
-        btn_add.clicked.connect(self._tambah)
-        filter_bar.addWidget(btn_add)
-
-        self.btn_edit = QPushButton("✏️  Edit Status")
-        self.btn_edit.setObjectName("btnSecondary")
-        self.btn_edit.setEnabled(False)
-        self.btn_edit.clicked.connect(self._edit)
-        filter_bar.addWidget(self.btn_edit)
-
-        self.btn_del = QPushButton("🗑️  Hapus")
-        self.btn_del.setObjectName("btnDanger")
-        self.btn_del.setEnabled(False)
-        self.btn_del.clicked.connect(self._hapus)
-        filter_bar.addWidget(self.btn_del)
-
-        btn_import = QPushButton("📥  Import File")
-        btn_import.setObjectName("btnSecondary")
-        btn_import.clicked.connect(self._import_file)
-        btn_import.setToolTip("Import data pesanan dari file CSV atau Excel (Ctrl+I)")
-        filter_bar.addWidget(btn_import)
-
-        root.addLayout(filter_bar)
-
-        self.table = QTableWidget()
-        self.table.setObjectName("dataTable")
-        cols = ["ID", "Pelanggan", "Produk", "Kategori",
-                "Jumlah", "Total Harga", "Tgl Pesan", "Status", "Metode Bayar"]
-        self.table.setColumnCount(len(cols))
-        self.table.setHorizontalHeaderLabels(cols)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.table.setColumnWidth(0, 44)
+        # Tabel — semua 20 kolom, bisa scroll kanan
+        self.table = QTableWidget(); self.table.setObjectName("dataTable")
+        self._ORDER_COLS = [
+            "ID DB", "Order ID", "Pelanggan", "Produk", "Category", "Price",
+            "Qty", "Discount", "Total", "Shipping Fee", "Total Sales",
+            "Status", "Alamat", "Gender", "Kota", "Payment",
+            "Courier", "Est. Hari", "Channel", "Rating", "Sales Date",
+        ]
+        self.table.setColumnCount(len(self._ORDER_COLS))
+        self.table.setHorizontalHeaderLabels(self._ORDER_COLS)
+        # Semua kolom pakai ResizeToContents agar bisa melebar + scroll horizontal
+        hdr = self.table.horizontalHeader()
+        hdr.setSectionResizeMode(QHeaderView.ResizeToContents)
+        hdr.setMinimumSectionSize(60)
+        self.table.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setShowGrid(False)
-        self.table.itemSelectionChanged.connect(self._on_selection_changed)
-        self.table.doubleClicked.connect(self._edit)
+        self.table.itemSelectionChanged.connect(self._on_sel_changed)
+        self.table.doubleClicked.connect(self._edit_order)
         root.addWidget(self.table)
-
         self.tabs.addTab(tab, "📋  Data Pesanan")
 
+    # ─── Tab Produk ───────────────────────────────────────────────────────────
+    def _build_tab_products(self):
+        tab = QWidget(); tab.setObjectName("tabProduk")
+        root = QVBoxLayout(tab); root.setContentsMargins(16,14,16,14); root.setSpacing(8)
+
+        fb = QHBoxLayout(); fb.setSpacing(8); fb.addStretch()
+        btn_ref = QPushButton("🔄  Refresh"); btn_ref.setObjectName("btnRefresh")
+        btn_ref.clicked.connect(self._load_products); fb.addWidget(btn_ref)
+        btn_add = QPushButton("➕  Tambah Produk"); btn_add.setObjectName("btnPrimary")
+        btn_add.clicked.connect(self._tambah_produk); fb.addWidget(btn_add)
+        self.btn_edit_prod = QPushButton("✏️  Edit"); self.btn_edit_prod.setObjectName("btnSecondary")
+        self.btn_edit_prod.setEnabled(False); self.btn_edit_prod.clicked.connect(self._edit_produk)
+        fb.addWidget(self.btn_edit_prod)
+        self.btn_del_prod = QPushButton("🗑️  Hapus"); self.btn_del_prod.setObjectName("btnDanger")
+        self.btn_del_prod.setEnabled(False); self.btn_del_prod.clicked.connect(self._hapus_produk)
+        fb.addWidget(self.btn_del_prod)
+        root.addLayout(fb)
+
+        self.tbl_prod = QTableWidget(); self.tbl_prod.setObjectName("dataTable")
+        pcols = ["ID", "Product Name", "Category", "Price"]
+        self.tbl_prod.setColumnCount(len(pcols))
+        self.tbl_prod.setHorizontalHeaderLabels(pcols)
+        self.tbl_prod.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tbl_prod.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self.tbl_prod.setColumnWidth(0, 50)
+        self.tbl_prod.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tbl_prod.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tbl_prod.setAlternatingRowColors(True)
+        self.tbl_prod.verticalHeader().setVisible(False)
+        self.tbl_prod.setShowGrid(False)
+        self.tbl_prod.itemSelectionChanged.connect(self._on_prod_sel_changed)
+        root.addWidget(self.tbl_prod)
+        self.tabs.addTab(tab, "📦  Produk")
+
+    # ─── Tab Prediksi ML ─────────────────────────────────────────────────────
+    def _build_tab_prediksi(self):
+        self._tab_prediksi = TabPrediksi()
+        self.tabs.addTab(self._tab_prediksi, "🤖  Prediksi ML")
+
     def _build_statusbar(self):
-        sb = self.statusBar()
-        sb.setObjectName("statusBar")
+        sb = self.statusBar(); sb.setObjectName("statusBar")
         sb.setSizeGripEnabled(False)
         sb.setStyleSheet("QStatusBar::item { border: none; }")
         self.lbl_status = QLabel("  Memuat data...")
         sb.addWidget(self.lbl_status)
 
     # ─── Data Loading ─────────────────────────────────────────────────────────
-
     def refresh_all(self):
         self.lbl_status.setText("  🔄  Mengambil data dari API...")
-        status = self.f_status.currentText() if hasattr(self, "f_status") else "All"
-        metode = self.f_metode.currentText() if hasattr(self, "f_metode") else "All"
-
-        self._loader = DataLoader(self.api, status, metode)
+        status  = self.f_status.currentText()  if hasattr(self, "f_status")  else "All"
+        channel = self.f_channel.currentText() if hasattr(self, "f_channel") else "All"
+        self._loader = DataLoader(self.api, status, channel)
         self._loader.finished.connect(self._on_data_loaded)
         self._loader.error.connect(self._on_data_error)
         self._loader.start()
+        self._load_products()
 
     @Slot(list)
-    def _on_data_loaded(self, orders: list[OrderRecord]):
+    def _on_data_loaded(self, orders):
         self._orders = orders
-        self._load_table(orders)
-        self._load_stats(orders)
-        self._load_charts(orders)
-        self.lbl_status.setText(f"  ✅  Total: {len(orders)} Pesanan  |  Terakhir diperbarui dari API")
-
-    @Slot(str)
-    def _on_data_error(self, msg: str):
-        self.lbl_status.setText(f"  ❌  Gagal memuat data: {msg}")
-        QMessageBox.warning(self, "Koneksi API Gagal",
-                            f"Tidak dapat mengambil data dari server.\n\nDetail: {msg}")
-
-    def _load_table(self, orders: list[OrderRecord]):
-        self.table.setRowCount(0)
-        STATUS_ROW_COLORS = {
-            "Selesai":     "#dcfce7",
-            "Diproses":    "#dbeafe",
-            "Dikirim":     "#e0e7ff",
-            "Pending":     "#fef9c3",
-            "Dibatalkan":  "#fee2e2",
-        }
-        for o in orders:
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            vals = [
-                str(o.id),
-                o.nama_pelanggan,
-                o.nama_barang,
-                o.kategori,
-                str(o.jumlah),
-                Formatter.currency(o.total_harga),
-                o.tanggal_pesanan,
-                o.status_pesanan,
-                o.metode_pembayaran,
-            ]
-            row_bg = STATUS_ROW_COLORS.get(o.status_pesanan)
-            for c, v in enumerate(vals):
-                item = QTableWidgetItem(v)
-                item.setTextAlignment(
-                    Qt.AlignCenter if c in (0, 4, 5, 6) else Qt.AlignLeft | Qt.AlignVCenter
-                )
-                if row_bg:
-                    item.setBackground(QColor(row_bg))
-                self.table.setItem(r, c, item)
-
-            # Warna badge kategori
-            cat_color = STATUS_COLORS.get(o.kategori, "#6b7280")
-            self.table.item(r, 3).setForeground(QColor(cat_color))
-
-    def _load_stats(self, orders: list[OrderRecord]):
+        self._fill_order_table(orders)
         stats = self.api.summary_stats(orders)
-        self._update_stat_card(self._card_tx,    Formatter.number(stats["total_tx"]))
-        self._update_stat_card(self._card_rev,   Formatter.short_currency(stats["total_rev"]))
-        self._update_stat_card(self._card_avg,   Formatter.short_currency(stats["avg_rev"]))
-        self._update_stat_card(self._card_units, Formatter.number(stats["total_units"]))
-
-    def _load_charts(self, orders: list[OrderRecord]):
-        agg = {
+        self._set_card(self._card_tx,    Formatter.number(stats["total_tx"]))
+        self._set_card(self._card_rev,   Formatter.short_currency(stats["total_rev"]))
+        self._set_card(self._card_avg,   Formatter.short_currency(stats["avg_rev"]))
+        self._set_card(self._card_units, Formatter.number(stats["total_units"]))
+        self._dash_chart.set_data({
             "revenue_by_kategori": self.api.revenue_by_kategori(orders),
             "revenue_by_status":   self.api.revenue_by_status(orders),
             "revenue_by_month":    self.api.revenue_by_month(orders),
             "units_by_payment":    self.api.units_by_payment(orders),
             "top_products":        self.api.top_products(orders),
+        })
+        self._tab_prediksi.load_orders(orders)
+        self.lbl_status.setText(
+            f"  ✅  {len(orders)} pesanan  |  diperbarui dari API")
+
+    @Slot(str)
+    def _on_data_error(self, msg):
+        self.lbl_status.setText(f"  ❌  Gagal memuat: {msg}")
+        QMessageBox.warning(self, "Koneksi API Gagal", f"Detail: {msg}")
+
+    # ─── Fill tabel pesanan (20 kolom, scroll kanan) ──────────────────────────
+    def _fill_order_table(self, orders):
+        STATUS_BG = {
+            "Selesai":"#dcfce7","Diproses":"#dbeafe",
+            "Dikirim":"#e0e7ff","Pending":"#fef9c3","Dibatalkan":"#fee2e2",
         }
-        self._dash_chart.set_data(agg)
+        self.table.setRowCount(0)
+        for o in orders:
+            r = self.table.rowCount(); self.table.insertRow(r)
+            vals = [
+                str(o.id),
+                o.order_id,
+                o.customer_name,
+                o.product_name,
+                o.category,
+                Formatter.currency(o.price),
+                str(o.quantity),
+                Formatter.currency(o.discount),
+                Formatter.currency(o.total),
+                Formatter.currency(o.shipping_fee),
+                Formatter.currency(o.total_sales),
+                o.status,
+                o.shipping_address,
+                o.customer_gender,
+                o.customer_city,
+                o.payment_method,
+                o.courier,
+                str(o.estimated_delivery_days),
+                o.sales_channel,
+                str(o.customer_rating),
+                o.sales_date,
+            ]
+            bg = STATUS_BG.get(o.status)
+            for c, v in enumerate(vals):
+                item = QTableWidgetItem(v)
+                item.setTextAlignment(Qt.AlignCenter)
+                if bg: item.setBackground(QColor(bg))
+                self.table.setItem(r, c, item)
 
-    # ─── Filter ───────────────────────────────────────────────────────────────
+    # ─── Produk tab ───────────────────────────────────────────────────────────
+    def _load_products(self):
+        prods = self.api.get_products()
+        self.tbl_prod.setRowCount(0)
+        for p in prods:
+            r = self.tbl_prod.rowCount(); self.tbl_prod.insertRow(r)
+            for c, v in enumerate([str(p.id), p.product_name, p.category,
+                                    Formatter.currency(p.price)]):
+                item = QTableWidgetItem(v)
+                item.setTextAlignment(Qt.AlignCenter)
+                self.tbl_prod.setItem(r, c, item)
 
-    @Slot()
-    def _on_filter_changed(self):
-        self.refresh_all()
+    def _on_prod_sel_changed(self):
+        has = bool(self.tbl_prod.selectedItems())
+        self.btn_edit_prod.setEnabled(has)
+        self.btn_del_prod.setEnabled(has)
 
-    @Slot()
-    def _on_selection_changed(self):
-        has = bool(self.table.selectedItems())
-        self.btn_edit.setEnabled(has)
-        self.btn_del.setEnabled(has)
-
-    def _selected_order_id(self) -> int | None:
-        row = self.table.currentRow()
-        if row < 0:
-            return None
-        item = self.table.item(row, 0)
-        return int(item.text()) if item else None
-
-    def _selected_order(self) -> OrderRecord | None:
-        oid = self._selected_order_id()
-        if oid is None:
-            return None
-        for o in self._orders:
-            if o.id == oid:
-                return o
+    def _selected_product(self) -> ProductRecord | None:
+        row = self.tbl_prod.currentRow()
+        if row < 0: return None
+        pid = int(self.tbl_prod.item(row, 0).text())
+        for p in self.api._products_cache:
+            if p.id == pid: return p
         return None
 
-    # ─── CRUD ─────────────────────────────────────────────────────────────────
+    def _tambah_produk(self):
+        dlg = DialogProduk(self)
+        if dlg.exec() != QDialog.Accepted: return
+        try:
+            self.api.create_product(dlg.get_data())
+            self._load_products()
+            self.lbl_status.setText("  ✅  Produk baru berhasil ditambahkan.")
+        except Exception as e:
+            QMessageBox.critical(self, "Gagal Tambah Produk", str(e))
 
-    def _tambah(self):
-        products = self.api.get_products()
-        if not products:
+    def _edit_produk(self):
+        p = self._selected_product()
+        if not p: return
+        dlg = DialogProduk(self, product=p)
+        if dlg.exec() != QDialog.Accepted: return
+        try:
+            self.api.update_product(p.id, dlg.get_data())
+            self._load_products()
+            self.lbl_status.setText(f"  ✅  Produk ID {p.id} berhasil diperbarui.")
+        except Exception as e:
+            QMessageBox.critical(self, "Gagal Edit Produk", str(e))
+
+    def _hapus_produk(self):
+        p = self._selected_product()
+        if not p: return
+        if QMessageBox.question(
+            self, "Hapus Produk",
+            f"Hapus produk '{p.product_name}'?\nPesanan yang menggunakan produk ini mungkin terpengaruh.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        ) != QMessageBox.Yes: return
+        try:
+            self.api.delete_product(p.id)
+            self._load_products()
+            self.lbl_status.setText(f"  🗑️  Produk '{p.product_name}' dihapus.")
+        except Exception as e:
+            QMessageBox.critical(self, "Gagal Hapus Produk", str(e))
+
+    # ─── Filter & Selection ───────────────────────────────────────────────────
+    @Slot()
+    def _on_filter_changed(self): self.refresh_all()
+
+    @Slot()
+    def _on_sel_changed(self):
+        has = bool(self.table.selectedItems())
+        self.btn_edit.setEnabled(has); self.btn_del.setEnabled(has)
+
+    def _selected_order(self):
+        row = self.table.currentRow()
+        if row < 0: return None
+        oid = int(self.table.item(row, 0).text())
+        for o in self._orders:
+            if o.id == oid: return o
+        return None
+
+    # ─── CRUD Pesanan ─────────────────────────────────────────────────────────
+    def _tambah_order(self):
+        prods = self.api.get_products()
+        if not prods:
             QMessageBox.warning(self, "Produk Kosong",
-                                "Tidak ada produk di database.\n"
-                                "Pastikan API aktif dan tabel products sudah terisi.")
-            return
-        dlg = DialogOrder(self, products=products)
-        if dlg.exec() != QDialog.Accepted:
-            return
-        data = dlg.get_raw_data()
+                                "Tambahkan produk dulu di tab Produk."); return
+        dlg = DialogOrder(self, products=prods)
+        if dlg.exec() != QDialog.Accepted: return
         try:
-            result = self.api.create_order({
-                "nama_pelanggan": data["nama_pelanggan"],
-                "product_id":     data["product_id"],
-                "jumlah":         data["jumlah"],
-                "total_harga":    data["total_harga"],
-            })
+            self.api.create_order(dlg.get_raw_data())
             self.refresh_all()
-            self.lbl_status.setText(f"  ✅  Pesanan baru berhasil dicatat.")
+            self.lbl_status.setText("  ✅  Pesanan baru berhasil dicatat.")
         except Exception as e:
-            QMessageBox.critical(self, "Gagal Tambah", f"Error: {e}")
+            QMessageBox.critical(self, "Gagal Tambah", str(e))
 
-    def _edit(self):
-        order = self._selected_order()
-        if not order:
-            QMessageBox.information(self, "Info", "Pilih baris yang ingin diedit.")
-            return
-
-        # Hanya update status_pesanan via API
-        from PySide6.QtWidgets import QInputDialog
-        status, ok = QInputDialog.getItem(
-            self, "Update Status Pesanan",
-            f"Pilih status baru untuk pesanan ID {order.id}\n"
-            f"Pelanggan: {order.nama_pelanggan}",
-            STATUS_PESANAN,
-            STATUS_PESANAN.index(order.status_pesanan) if order.status_pesanan in STATUS_PESANAN else 0,
-            False,
-        )
-        if not ok:
-            return
+    def _edit_order(self):
+        o = self._selected_order()
+        if not o:
+            QMessageBox.information(self, "Info", "Pilih baris yang ingin diedit."); return
+        prods = self.api.get_products()
+        dlg = DialogOrder(self, record=o, products=prods)
+        if dlg.exec() != QDialog.Accepted: return
         try:
-            self.api.update_order_status(order.id, status)
+            self.api.update_order(o.id, dlg.get_raw_data())
             self.refresh_all()
-            self.lbl_status.setText(f"  ✅  Status pesanan ID {order.id} diperbarui → {status}")
+            self.lbl_status.setText(f"  ✅  Pesanan ID {o.id} berhasil diperbarui.")
         except Exception as e:
-            QMessageBox.critical(self, "Gagal Update", f"Error: {e}")
+            QMessageBox.critical(self, "Gagal Update", str(e))
 
-    def _hapus(self):
-        order = self._selected_order()
-        if not order:
-            QMessageBox.information(self, "Info", "Pilih baris yang ingin dihapus.")
-            return
-        ret = QMessageBox.question(
+    def _hapus_order(self):
+        o = self._selected_order()
+        if not o:
+            QMessageBox.information(self, "Info", "Pilih baris yang ingin dihapus."); return
+        if QMessageBox.question(
             self, "Konfirmasi Hapus",
-            f"Hapus pesanan berikut?\n\n"
-            f"  ID       : {order.id}\n"
-            f"  Pelanggan: {order.nama_pelanggan}\n"
-            f"  Produk   : {order.nama_barang}\n"
-            f"  Total    : {Formatter.currency(order.total_harga)}\n\n"
-            f"Tindakan ini tidak bisa dibatalkan.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if ret != QMessageBox.Yes:
-            return
+            f"Hapus pesanan ID {o.id} — {o.customer_name} ({o.product_name})?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        ) != QMessageBox.Yes: return
         try:
-            self.api.delete_order(order.id)
+            self.api.delete_order(o.id)
             self.refresh_all()
-            self.lbl_status.setText(f"  🗑️  Pesanan ID {order.id} berhasil dihapus.")
+            self.lbl_status.setText(f"  🗑️  Pesanan ID {o.id} dihapus.")
         except Exception as e:
-            QMessageBox.critical(self, "Gagal Hapus", f"Error: {e}")
+            QMessageBox.critical(self, "Gagal Hapus", str(e))
 
     def _import_file(self):
         dlg = DialogImport(self, api=self.api)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
-            self.lbl_status.setText("  ✅  Import selesai. Data berhasil dimuat ulang.")
+            self.lbl_status.setText("  ✅  Import selesai.")
 
     def _logout(self):
-        ret = QMessageBox.question(self, "Logout",
-                                   "Yakin ingin keluar dari sistem?",
-                                   QMessageBox.Yes | QMessageBox.No,
-                                   QMessageBox.No)
-        if ret == QMessageBox.Yes:
+        if QMessageBox.question(
+            self, "Logout", "Yakin ingin keluar?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        ) == QMessageBox.Yes:
             self.close()
-            # Buka kembali login window
-            from login_window import LoginWindow
-            from PySide6.QtWidgets import QApplication
-            import sys
-            self._login_win = LoginWindow()
-            self._login_win.show()
+            from ui.login_window import LoginWindow
+            self._lw = LoginWindow(); self._lw.show()
