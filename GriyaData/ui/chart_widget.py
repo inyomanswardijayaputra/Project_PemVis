@@ -207,7 +207,8 @@ class ChartWidget(QWidget):
 
         bars = ax.barh(labels, values, color="#3b82f6", edgecolor="white",
                        linewidth=1, zorder=3)
-        ax.set_title("Top 10 Produk Miniatur by Revenue", fontsize=13,
+        
+        ax.set_title("Top 10 Produk Furniture by Revenue", fontsize=13,
                      fontweight="bold", color="#1a1a1a", pad=12)
         ax.set_xlabel("Revenue (Juta Rp)", fontsize=10, color="#6b7280")
         ax.tick_params(colors="#6b7280", labelsize=8)

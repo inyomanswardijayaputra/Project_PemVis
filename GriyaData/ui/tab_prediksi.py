@@ -117,9 +117,9 @@ def _metric_card(title, value, sub, color):
     lv = QLabel(value); lv.setObjectName("__mv")
     lv.setStyleSheet(f"font-size:20px;font-weight:700;color:{color};")
     lt = QLabel(title)
-    lt.setStyleSheet("font-size:10px;color:#6b7280;font-weight:600;")
+    lt.setStyleSheet("font-size:11px;color:#4b5563;font-weight:600;")
     ls = QLabel(sub); ls.setObjectName("__ms")
-    ls.setStyleSheet("font-size:9px;color:#9ca3af;")
+    ls.setStyleSheet("font-size:10px;color:#9ca3af;")
     lay.addWidget(lv); lay.addWidget(lt); lay.addWidget(ls)
     return card
 
@@ -146,15 +146,14 @@ class TabPrediksi(QWidget):
             border-radius:10px;}""")
         hdr.setFixedHeight(56)
         hl = QHBoxLayout(hdr); hl.setContentsMargins(18, 0, 18, 0)
-        ico = QLabel("🤖"); ico.setStyleSheet("font-size:24px;")
-        rv = QVBoxLayout(); rv.setSpacing(1)
+        rv = QVBoxLayout(); rv.setSpacing(1); rv.setAlignment(Qt.AlignVCenter)
         t1 = QLabel("Prediksi Penjualan — Random Forest ML")
         t1.setStyleSheet("font-size:14px;font-weight:700;color:#fff;")
         t2 = QLabel("Forecast unit & revenue per produk / semua produk")
         t2.setStyleSheet("font-size:10px;color:#94d3c8;")
         rv.addWidget(t1); rv.addWidget(t2)
-        hl.addWidget(ico); hl.addSpacing(8); hl.addLayout(rv); hl.addStretch()
-        badge = QLabel("scikit-learn")
+        hl.addLayout(rv); hl.addStretch()
+        badge = QLabel("PROYEKSI AKTIF")
         badge.setStyleSheet("""background:#10b981;color:#fff;font-size:10px;
             font-weight:700;padding:3px 10px;border-radius:12px;""")
         hl.addWidget(badge)
@@ -188,6 +187,9 @@ class TabPrediksi(QWidget):
 
         cl.addWidget(QLabel("Periode:"))
         self.spin_periods = QSpinBox(); self.spin_periods.setObjectName("inputField")
+        
+        self.spin_periods.setButtonSymbols(QSpinBox.PlusMinus)
+        
         self.spin_periods.setRange(1, 6); self.spin_periods.setValue(3)
         self.spin_periods.setSuffix(" periode"); self.spin_periods.setMinimumWidth(100)
         cl.addWidget(self.spin_periods)
@@ -208,7 +210,7 @@ class TabPrediksi(QWidget):
         self._c_rmse = _metric_card("RMSE",       "—", "Root Mean Sq Err",    "#8b5cf6")
         self._c_acc  = _metric_card("Kualitas",   "—", "Evaluasi model RF",   "#10b981")
         for c in (self._c_r2, self._c_mae, self._c_rmse, self._c_acc):
-            c.setFixedHeight(74)
+            c.setMinimumHeight(70)
             ml.addWidget(c)
         root.addWidget(mw)
 
@@ -229,7 +231,7 @@ class TabPrediksi(QWidget):
         tw_lay = QVBoxLayout(tbl_wrap)
         tw_lay.setContentsMargins(0, 4, 0, 0); tw_lay.setSpacing(4)
         lbl_t = QLabel("Hasil Prediksi")
-        lbl_t.setStyleSheet("font-size:11px;font-weight:700;color:#374151;")
+        lbl_t.setStyleSheet("font-size:12px;font-weight:700;color:#374151;")
         tw_lay.addWidget(lbl_t)
         self.tbl_result = QTableWidget()
         self.tbl_result.setObjectName("dataTable")
@@ -238,9 +240,17 @@ class TabPrediksi(QWidget):
             "Periode", "Prediksi Unit", "Confidence Range",
             "Prediksi Revenue (Rp)", "±"
         ])
+        
+        self.tbl_result.setStyleSheet("""
+            QTableWidget { border: 1px solid #d1d5db; border-radius: 4px; }
+            QHeaderView::section { background-color: #f3f4f6; font-weight: bold; color: #374151; padding: 6px; border: none; border-bottom: 1px solid #d1d5db; }
+            QTableWidget::item:selected { background-color: #3b82f6; color: white; }
+        """)
+        
         self.tbl_result.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tbl_result.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tbl_result.setAlternatingRowColors(True)
+        self.tbl_result.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_result.verticalHeader().setVisible(False)
         self.tbl_result.setShowGrid(False)
         tw_lay.addWidget(self.tbl_result)
@@ -360,5 +370,4 @@ class TabPrediksi(QWidget):
             for c, v in enumerate(vals):
                 item = QTableWidgetItem(v)
                 item.setTextAlignment(Qt.AlignCenter)
-                item.setBackground(QColor("#f0fdf4"))
                 self.tbl_result.setItem(r, c, item)

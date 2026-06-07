@@ -11,7 +11,8 @@ class LoginWindow(QMainWindow):
         self.setWindowTitle("GriyaData - Login System")
         self.API_URL = "https://griyadata-backend-production.up.railway.app/api/login"
         self.initUI()
-        self.showMaximized()
+        
+        self.showFullScreen()
         
     def initUI(self):
         outer_widget = QWidget(self)
@@ -55,7 +56,7 @@ class LoginWindow(QMainWindow):
         """)
         card_layout.addWidget(header)
         
-        subtitle_label = QLabel("Aplikasi Manajemen Toko Miniatur")
+        subtitle_label = QLabel("Aplikasi Manajemen Toko Furniture")
         subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setStyleSheet("""
             QLabel {
@@ -105,8 +106,8 @@ class LoginWindow(QMainWindow):
         form_layout.addWidget(self.password_input)
         form_layout.addSpacing(24)
         
-        self.login_button = QPushButton("Masuk Ke Sistem")
-        self.login_button.setFont(QFont("Arial", 12, QFont.Bold))
+        self.login_button = QPushButton("LOGIN")
+        self.login_button.setFont(QFont("Arial", 24, QFont.Bold))
         self.login_button.setCursor(Qt.PointingHandCursor)
         self.login_button.setFixedHeight(50)
         self.login_button.setStyleSheet("""
@@ -217,7 +218,6 @@ class LoginWindow(QMainWindow):
                 self._dashboard.setStyleSheet(f.read())
         self._dashboard.show()
         self.close()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

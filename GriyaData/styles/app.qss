@@ -279,11 +279,11 @@ QTabBar::tab:hover:!selected {
 #btnRefresh {
     background-color: #ffffff;
     color: #374151;
-    padding: 7px 7px;
+    padding: 6px 20px; 
     border: 1.5px solid #d1d5db;
     border-radius: 7px;
-    min-width: 32px;
-    max-width: 32px;
+    min-width: 90px;
+    font-weight: 600;
 }
 
 #btnRefresh:hover {

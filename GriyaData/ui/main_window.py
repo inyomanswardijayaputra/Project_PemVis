@@ -55,10 +55,10 @@ class DialogProduk(QDialog):
         form = QFormLayout(); form.setSpacing(10)
         self.inp_name = QLineEdit(p.product_name if p else "")
         self.inp_name.setObjectName("inputField")
-        self.inp_name.setPlaceholderText("e.g. Gundam RX-78")
+        self.inp_name.setPlaceholderText("e.g. Meja Belajar")
         self.inp_cat  = QLineEdit(p.category if p else "")
         self.inp_cat.setObjectName("inputField")
-        self.inp_cat.setPlaceholderText("e.g. Miniatur")
+        self.inp_cat.setPlaceholderText("e.g. Meja")
         self.inp_price = QLineEdit(str(p.price) if p else "")
         self.inp_price.setObjectName("inputField")
         self.inp_price.setPlaceholderText("e.g. 150000")
@@ -102,7 +102,8 @@ class MainWindow(QMainWindow):
         self.username = username
         self.setWindowTitle(APP_TITLE)
         self.setMinimumSize(1280, 760)
-        self.resize(1480, 860)
+        
+        self.showFullScreen()
 
         self.api = APIHandler()
         self._orders: list[OrderRecord] = []
@@ -151,13 +152,17 @@ class MainWindow(QMainWindow):
     def _make_banner(self):
         b = QFrame(); b.setObjectName("banner")
         lay = QHBoxLayout(b); lay.setContentsMargins(20,12,20,12)
-        lbl = QLabel("GriyaData — Penjualan Miniatur")
+        
+        lbl = QLabel("GriyaData — Dashboard Manajemen Furniture")
         lbl.setObjectName("bannerApp")
         lbl.setStyleSheet("font-size:19px;font-weight:700;color:#1a1a1a;")
         lay.addWidget(lbl); lay.addStretch()
         fr = QFrame(); fr.setObjectName("frameIdentitas")
+        
+        fr.setMinimumWidth(280)
         il = QHBoxLayout(fr); il.setContentsMargins(14,6,14,6); il.setSpacing(16)
-        il.addWidget(QLabel(f"👤  {self.username}"))
+        
+        il.addWidget(QLabel(f"User: {self.username}"))
         il.addWidget(QLabel("API: griyadataapi"))
         lay.addWidget(fr)
         return b
@@ -201,6 +206,7 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(tab); root.setContentsMargins(16,14,16,14); root.setSpacing(8)
 
         fb = QHBoxLayout(); fb.setSpacing(8)
+        
         for label, attr, items in [
             ("Status:",  "f_status",  STATUS_LIST),
             ("Channel:", "f_channel", CHANNEL_LIST),
@@ -215,7 +221,7 @@ class MainWindow(QMainWindow):
             fb.addWidget(lbl); fb.addWidget(cb); fb.addSpacing(12)
 
         btn_ref = QPushButton("Refresh"); btn_ref.setObjectName("btnRefresh")
-        btn_ref.setFixedWidth(36); btn_ref.clicked.connect(self.refresh_all)
+        btn_ref.clicked.connect(self.refresh_all)
         fb.addWidget(btn_ref); fb.addStretch()
 
         btn_add = QPushButton("Tambah"); btn_add.setObjectName("btnPrimary")
@@ -248,6 +254,14 @@ class MainWindow(QMainWindow):
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setShowGrid(False)
+        
+        self.table.setStyleSheet("""
+            QTableWidget::item:selected {
+                background-color: #3b82f6; 
+                color: white;
+            }
+        """)
+        
         self.table.itemSelectionChanged.connect(self._on_sel_changed)
         self.table.doubleClicked.connect(self._edit_order)
         root.addWidget(self.table)
@@ -258,9 +272,13 @@ class MainWindow(QMainWindow):
         tab = QWidget(); tab.setObjectName("tabProduk")
         root = QVBoxLayout(tab); root.setContentsMargins(16,14,16,14); root.setSpacing(8)
 
-        fb = QHBoxLayout(); fb.setSpacing(8); fb.addStretch()
+        fb = QHBoxLayout(); fb.setSpacing(8)
+        fb.addStretch()
+        
         btn_ref = QPushButton("Refresh"); btn_ref.setObjectName("btnRefresh")
-        btn_ref.clicked.connect(self._load_products); fb.addWidget(btn_ref)
+        btn_ref.clicked.connect(self._load_products)
+        fb.addWidget(btn_ref)
+        
         btn_add = QPushButton("Tambah Produk"); btn_add.setObjectName("btnPrimary")
         btn_add.clicked.connect(self._tambah_produk); fb.addWidget(btn_add)
         self.btn_edit_prod = QPushButton("Edit"); self.btn_edit_prod.setObjectName("btnSecondary")
@@ -283,6 +301,7 @@ class MainWindow(QMainWindow):
         self.tbl_prod.setAlternatingRowColors(True)
         self.tbl_prod.verticalHeader().setVisible(False)
         self.tbl_prod.setShowGrid(False)
+        self.tbl_prod.setStyleSheet("QTableWidget::item:selected { background-color: #3b82f6; color: white; }")
         self.tbl_prod.itemSelectionChanged.connect(self._on_prod_sel_changed)
         root.addWidget(self.tbl_prod)
         self.tabs.addTab(tab, "Produk")

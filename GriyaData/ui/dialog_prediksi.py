@@ -88,14 +88,12 @@ class PrediksiCanvas(FigureCanvas):
         ax.plot(
             pred_x, pred_y,
             color=warna_pred, linewidth=2.5, linestyle="--",
-            marker="s", markersize=6, label=f"Prediksi ({hasil.nama_model})", zorder=3,
+            marker="s", markersize=6, label=f"Proyeksi ({hasil.nama_model})", zorder=3,
         )
         ax.fill_between(pred_x, pred_y, alpha=0.10, color=warna_pred)
 
         if n_hist > 0:
             ax.axvline(x=n_hist - 1, color="#94a3b8", linestyle=":", linewidth=1.5, alpha=0.7)
-            ax.text(n_hist - 1 + 0.1, ax.get_ylim()[1] * 0.95 if ax.get_ylim()[1] > 0 else 1,
-                    "← Historis | Prediksi →", fontsize=8, color="#64748b")
 
         for i, (lbl, val) in enumerate(zip(pred_labels, pred_values)):
             ax.annotate(
@@ -110,8 +108,8 @@ class PrediksiCanvas(FigureCanvas):
         ax.yaxis.set_major_formatter(
             plt.FuncFormatter(lambda x, _: f"Rp {x/1_000_000:.1f}Jt" if x >= 1_000_000 else f"Rp {x:,.0f}")
         )
-        ax.set_title(judul or f"Prediksi Revenue — {hasil.nama_model}", fontsize=11, fontweight="bold", pad=10)
-        ax.set_ylabel("Revenue (Rp)", fontsize=9)
+        ax.set_title(judul or f"Hasil Analisis — {hasil.nama_model}", fontsize=11, fontweight="bold", pad=10)
+        ax.set_ylabel("Estimasi Revenue (Rp)", fontsize=9)
         ax.legend(fontsize=9, loc="upper left")
         ax.grid(axis="y", linestyle="--", alpha=0.4)
         ax.spines["top"].set_visible(False)
@@ -121,7 +119,6 @@ class PrediksiCanvas(FigureCanvas):
         self.draw()
 
     def plot_perbandingan(self, hasil: "HarapanPrediksi"):
-        """Plot perbandingan Linear vs Random Forest side by side."""
         self.fig.clear()
         ax = self.fig.add_subplot(111)
         ax.set_facecolor("#ffffff")
@@ -135,11 +132,10 @@ class PrediksiCanvas(FigureCanvas):
         width = 0.35
 
         bars1 = ax.bar([i - width/2 for i in x], lin_val, width,
-                       label="Linear Regression", color="#3b82f6", alpha=0.85, zorder=3)
+                       label="Model Linear", color="#3b82f6", alpha=0.85, zorder=3)
         bars2 = ax.bar([i + width/2 for i in x], rf_val, width,
-                       label="Random Forest", color="#10b981", alpha=0.85, zorder=3)
+                       label="Model Dinamis", color="#10b981", alpha=0.85, zorder=3)
 
-        # Anotasi di atas bar
         for bar in bars1:
             h = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2, h + max(h*0.02, 100),
@@ -156,35 +152,24 @@ class PrediksiCanvas(FigureCanvas):
         ax.yaxis.set_major_formatter(
             plt.FuncFormatter(lambda v, _: f"Rp {v/1_000_000:.1f}Jt" if v >= 1_000_000 else f"Rp {v:,.0f}")
         )
-        ax.set_title("Perbandingan Prediksi: Linear Regression vs Random Forest",
-                     fontsize=11, fontweight="bold", pad=10)
+        ax.set_title("Perbandingan Estimasi Metode", fontsize=11, fontweight="bold", pad=10)
         ax.legend(fontsize=9)
         ax.grid(axis="y", linestyle="--", alpha=0.4)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-        rekomendasi = hasil.rekomendasi_model
-        rek_color = "#3b82f6" if rekomendasi == "Linear Regression" else "#10b981"
-        ax.set_xlabel(f"Model Rekomendasi: {rekomendasi}", fontsize=9,
-                      color=rek_color, fontweight="bold")
 
         self.fig.tight_layout()
         self.draw()
 
 # Main Dialog
 class DialogPrediksi(QDialog):
-    """
-    Dialog utama fitur prediksi ML GriyaData.
-    Dipanggil dari MainWindow dengan parameter orders (list OrderRecord).
-    """
-
     def __init__(self, parent=None, orders: list = None):
         super().__init__(parent)
         self.orders  = orders or []
         self._hasil: HarapanPrediksi | None = None
         self._worker: PrediksiWorker | None = None
 
-        self.setWindowTitle("Prediksi Penjualan — Machine Learning GriyaData")
+        self.setWindowTitle("Proyeksi Penjualan")
         self.setMinimumSize(1100, 680)
         self.resize(1200, 720)
         self.setModal(True)
@@ -192,7 +177,6 @@ class DialogPrediksi(QDialog):
         self._daftar_produk = daftar_produk_dari_orders(self.orders)
         self._build_ui()
 
-    # Build UI
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -214,57 +198,53 @@ class DialogPrediksi(QDialog):
         hdr.setObjectName("banner")
         hdr.setStyleSheet("""
             QFrame { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                stop:0 #1e40af, stop:1 #065f46);
-                border-bottom: 1px solid #1e3a5f; }
+                stop:0 #2c3e50, stop:1 #2980b9);
+                border-bottom: 1px solid #2c3e50; }
         """)
         lay = QHBoxLayout(hdr)
-        lay.setContentsMargins(20, 14, 20, 14)
+        lay.setContentsMargins(25, 15, 25, 15)
 
-        ico = QLabel("🤖")
-        ico.setStyleSheet("font-size: 26px;")
-        lay.addWidget(ico)
-
-        ttl = QLabel("Prediksi Penjualan — Machine Learning")
-        ttl.setStyleSheet("font-size:17px;font-weight:700;color:#ffffff;margin-left:8px;")
+        ttl = QLabel("Analisis Estimasi Pendapatan")
+        ttl.setStyleSheet("font-size:18px;font-weight:700;color:#ffffff;")
         lay.addWidget(ttl)
         lay.addStretch()
 
-        sub = QLabel("Linear Regression & Random Forest (scikit-learn)")
-        sub.setStyleSheet("font-size:11px;color:#bfdbfe;")
+        sub = QLabel("Sistem Proyeksi GriyaData")
+        sub.setStyleSheet("font-size:12px;color:#ecf0f1;")
         lay.addWidget(sub)
         return hdr
 
     def _make_sidebar(self) -> QFrame:
         sidebar = QFrame()
-        sidebar.setFixedWidth(240)
+        sidebar.setFixedWidth(260)
         sidebar.setStyleSheet("""
-            QFrame { background:#f1f5f9; border-right: 1px solid #e2e8f0; }
-            QLabel { color: #374151; }
-            QRadioButton { color: #374151; font-size: 13px; padding: 4px; }
+            QFrame { background:#f8fafc; border-right: 1px solid #e2e8f0; }
+            QLabel { color: #334155; }
+            QRadioButton { color: #334155; font-size: 13px; padding: 6px; }
             QComboBox, QSpinBox {
-                border: 1px solid #cbd5e1; border-radius: 6px;
-                padding: 5px 8px; background: white; color: #1e293b;
+                border: 1.5px solid #cbd5e1; border-radius: 6px;
+                padding: 6px 10px; background: white; color: #1e293b;
                 font-size: 12px;
             }
             QPushButton#btnPrediksi {
-                background: #1d4ed8; color: white; font-weight: 700;
-                font-size: 14px; border-radius: 8px; padding: 10px;
+                background: #2563eb; color: white; font-weight: 700;
+                font-size: 14px; border-radius: 8px; padding: 12px;
                 border: none;
             }
-            QPushButton#btnPrediksi:hover { background: #1e40af; }
+            QPushButton#btnPrediksi:hover { background: #1d4ed8; }
             QPushButton#btnPrediksi:disabled { background: #94a3b8; }
         """)
 
         lay = QVBoxLayout(sidebar)
-        lay.setContentsMargins(16, 20, 16, 16)
-        lay.setSpacing(14)
+        lay.setContentsMargins(20, 25, 20, 20)
+        lay.setSpacing(15)
 
-        lbl_target = QLabel("Target Prediksi")
-        lbl_target.setStyleSheet("font-weight:700;font-size:12px;color:#1e293b;")
+        lbl_target = QLabel("PARAMETER ANALISIS")
+        lbl_target.setStyleSheet("font-weight:800;font-size:11px;color:#64748b;letter-spacing:1px;")
         lay.addWidget(lbl_target)
 
-        self._radio_semua  = QRadioButton("Semua Produk")
-        self._radio_produk = QRadioButton("Per Produk")
+        self._radio_semua  = QRadioButton("Seluruh Inventori")
+        self._radio_produk = QRadioButton("Spesifik Produk")
         self._radio_semua.setChecked(True)
         self._radio_semua.toggled.connect(self._on_mode_changed)
 
@@ -275,54 +255,30 @@ class DialogPrediksi(QDialog):
         lay.addWidget(self._radio_semua)
         lay.addWidget(self._radio_produk)
 
-        lbl_produk = QLabel("Pilih Produk:")
-        lbl_produk.setStyleSheet("font-size:11px;color:#64748b;")
-        lay.addWidget(lbl_produk)
-
         self._combo_produk = QComboBox()
-        self._combo_produk.addItems(self._daftar_produk or ["(belum ada data)"])
+        self._combo_produk.addItems(self._daftar_produk or ["- No Data -"])
         self._combo_produk.setEnabled(False)
         lay.addWidget(self._combo_produk)
 
-        sep1 = QFrame()
-        sep1.setFrameShape(QFrame.HLine)
-        sep1.setStyleSheet("color:#cbd5e1;")
-        lay.addWidget(sep1)
+        sep1 = QFrame(); sep1.setFrameShape(QFrame.HLine)
+        sep1.setStyleSheet("color:#e2e8f0;"); lay.addWidget(sep1)
 
-        lbl_bulan = QLabel("Prediksi (bulan ke depan):")
-        lbl_bulan.setStyleSheet("font-size:11px;color:#64748b;")
-        lay.addWidget(lbl_bulan)
-
+        lay.addWidget(QLabel("Rentang Waktu (Bulan):"))
         self._spin_bulan = QSpinBox()
-        self._spin_bulan.setRange(1, 12)
-        self._spin_bulan.setValue(3)
-        self._spin_bulan.setSuffix(" bulan")
+        self._spin_bulan.setRange(1, 12); self._spin_bulan.setValue(3)
         lay.addWidget(self._spin_bulan)
 
         lay.addStretch()
 
         self._progress = QProgressBar()
-        self._progress.setRange(0, 0)
-        self._progress.setVisible(False)
-        self._progress.setStyleSheet("""
-            QProgressBar { border: none; border-radius: 4px; background: #e2e8f0; height: 6px; }
-            QProgressBar::chunk { background: #3b82f6; border-radius: 4px; }
-        """)
+        self._progress.setRange(0, 0); self._progress.setVisible(False)
+        self._progress.setFixedHeight(4)
         lay.addWidget(self._progress)
 
-        self._btn_prediksi = QPushButton("Jalankan Prediksi")
+        self._btn_prediksi = QPushButton("Mulai Proses")
         self._btn_prediksi.setObjectName("btnPrediksi")
         self._btn_prediksi.clicked.connect(self._run_prediksi)
         lay.addWidget(self._btn_prediksi)
-
-        btn_tutup = QPushButton("Tutup")
-        btn_tutup.setStyleSheet("""
-            QPushButton { background:#e2e8f0;color:#374151;border-radius:6px;
-                padding:7px; font-size:12px; border:none; }
-            QPushButton:hover { background:#cbd5e1; }
-        """)
-        btn_tutup.clicked.connect(self.accept)
-        lay.addWidget(btn_tutup)
 
         return sidebar
 
@@ -330,18 +286,18 @@ class DialogPrediksi(QDialog):
         widget = QWidget()
         widget.setStyleSheet("background: #ffffff;")
         lay = QVBoxLayout(widget)
-        lay.setContentsMargins(16, 16, 16, 16)
-        lay.setSpacing(12)
+        lay.setContentsMargins(20, 20, 20, 20)
+        lay.setSpacing(15)
 
         self._placeholder = QLabel(
-            "Pilih target prediksi dan klik: Jalankan Prediksi\n\n"
-            "Sistem akan melatih model Machine Learning (Linear Regression & Random Forest)\n"
-            "menggunakan data penjualan historis, lalu memproyeksikan revenue ke depan."
+            "Silakan tentukan parameter di panel kiri dan klik 'Mulai Proses'.\n\n"
+            "Sistem akan menganalisis tren penjualan historis Anda\n"
+            "untuk memberikan estimasi performa di masa mendatang."
         )
         self._placeholder.setAlignment(Qt.AlignCenter)
         self._placeholder.setStyleSheet(
-            "color:#94a3b8;font-size:14px;line-height:1.8;"
-            "border: 2px dashed #e2e8f0; border-radius:12px; padding:40px;"
+            "color:#64748b;font-size:14px;line-height:2.0;"
+            "border: 2px dashed #f1f5f9; border-radius:15px; padding:50px;"
         )
         lay.addWidget(self._placeholder)
 
@@ -349,110 +305,62 @@ class DialogPrediksi(QDialog):
         self._result_widget.setVisible(False)
         res_lay = QVBoxLayout(self._result_widget)
         res_lay.setContentsMargins(0, 0, 0, 0)
-        res_lay.setSpacing(10)
+        res_lay.setSpacing(15)
 
-        # Tab chart
         self._tabs_chart = QTabWidget()
         self._tabs_chart.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #e2e8f0; border-radius: 8px; background: white; }
-            QTabBar::tab { padding: 7px 18px; font-size: 12px; color: #64748b; background: #f8fafc;
-                border: 1px solid #e2e8f0; border-bottom: none; border-radius: 4px 4px 0 0; }
-            QTabBar::tab:selected { background: white; color: #1e293b; font-weight: 700; }
+            QTabWidget::pane { border: 1px solid #f1f5f9; border-radius: 10px; background: white; }
+            QTabBar::tab { padding: 10px 25px; font-size: 13px; color: #64748b; background: #f8fafc; }
+            QTabBar::tab:selected { background: white; color: #2563eb; font-weight: 700; border-bottom: 2px solid #2563eb; }
         """)
 
-        # Tab 1: Linear
-        tab_lin = QWidget()
-        tl = QVBoxLayout(tab_lin)
-        tl.setContentsMargins(4, 4, 4, 4)
-        self._canvas_linear = PrediksiCanvas()
-        tl.addWidget(self._canvas_linear)
-        self._tabs_chart.addTab(tab_lin, "Linear Regression")
+        tab_lin = QWidget(); tl = QVBoxLayout(tab_lin)
+        self._canvas_linear = PrediksiCanvas(); tl.addWidget(self._canvas_linear)
+        self._tabs_chart.addTab(tab_lin, "Estimasi Tren")
 
-        # Tab 2: Random Forest
-        tab_rf = QWidget()
-        tr = QVBoxLayout(tab_rf)
-        tr.setContentsMargins(4, 4, 4, 4)
-        self._canvas_rf = PrediksiCanvas()
-        tr.addWidget(self._canvas_rf)
-        self._tabs_chart.addTab(tab_rf, "Random Forest")
+        tab_rf = QWidget(); tr = QVBoxLayout(tab_rf)
+        self._canvas_rf = PrediksiCanvas(); tr.addWidget(self._canvas_rf)
+        self._tabs_chart.addTab(tab_rf, "Estimasi Dinamis")
 
-        # Tab 3: Perbandingan
-        tab_cmp = QWidget()
-        tc = QVBoxLayout(tab_cmp)
-        tc.setContentsMargins(4, 4, 4, 4)
-        self._canvas_cmp = PrediksiCanvas()
-        tc.addWidget(self._canvas_cmp)
-        self._tabs_chart.addTab(tab_cmp, "Perbandingan Model")
+        tab_cmp = QWidget(); tc = QVBoxLayout(tab_cmp)
+        self._canvas_cmp = PrediksiCanvas(); tc.addWidget(self._canvas_cmp)
+        self._tabs_chart.addTab(tab_cmp, "Komparasi Metode")
 
-        res_lay.addWidget(self._tabs_chart, 3)
+        res_lay.addWidget(self._tabs_chart, 4)
 
-        # Insight box
         self._txt_insight = QTextEdit()
         self._txt_insight.setReadOnly(True)
-        self._txt_insight.setMaximumHeight(120)
-        self._txt_insight.setStyleSheet("""
-            QTextEdit {
-                background: #f0fdf4; border: 1px solid #bbf7d0;
-                border-radius: 8px; padding: 10px;
-                font-family: 'Consolas', monospace; font-size: 11px;
-                color: #14532d;
-            }
-        """)
+        self._txt_insight.setMaximumHeight(100)
+        self._txt_insight.setStyleSheet("background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; font-size:12px; color:#334155;")
         res_lay.addWidget(self._txt_insight)
 
-        # Tabel angka prediksi
-        lbl_tbl = QLabel("Tabel Nilai Prediksi")
-        lbl_tbl.setStyleSheet("font-weight:700;font-size:12px;color:#1e293b;")
-        res_lay.addWidget(lbl_tbl)
-
         self._tabel = QTableWidget()
-        self._tabel.setMaximumHeight(160)
+        self._tabel.setMaximumHeight(200)
         self._tabel.setColumnCount(4)
-        self._tabel.setHorizontalHeaderLabels([
-            "Bulan", "Linear Regression", "Random Forest", "Selisih"
-        ])
+        self._tabel.setHorizontalHeaderLabels(["Bulan", "Metode Tren", "Metode Dinamis", "Selisih"])
         self._tabel.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self._tabel.setAlternatingRowColors(True)
-        self._tabel.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._tabel.setSelectionBehavior(QTableWidget.SelectRows)
         self._tabel.verticalHeader().setVisible(False)
         self._tabel.setShowGrid(False)
-        self._tabel.setStyleSheet("""
-            QTableWidget { border: 1px solid #e2e8f0; border-radius: 6px; font-size:11px; }
-            QHeaderView::section { background:#f8fafc; font-weight:700; border:none;
-                border-bottom: 1px solid #e2e8f0; padding: 6px; }
-        """)
         res_lay.addWidget(self._tabel)
 
         lay.addWidget(self._result_widget, 1)
         return widget
 
-    # Slot & logic
     def _on_mode_changed(self):
-        is_produk = self._radio_produk.isChecked()
-        self._combo_produk.setEnabled(is_produk)
+        self._combo_produk.setEnabled(self._radio_produk.isChecked())
 
     @Slot()
     def _run_prediksi(self):
         if not self.orders:
-            QMessageBox.warning(self, "Data Kosong",
-                                "Tidak ada data pesanan untuk dianalisis.\n"
-                                "Pastikan data pesanan sudah dimuat dari API.")
-            return
+            QMessageBox.warning(self, "Data Kosong", "Data pesanan tidak tersedia."); return
 
         mode = "produk" if self._radio_produk.isChecked() else "semua"
         nama_produk = self._combo_produk.currentText()
         n_bulan     = self._spin_bulan.value()
 
-        if mode == "produk" and not nama_produk:
-            QMessageBox.warning(self, "Produk Kosong", "Pilih produk terlebih dahulu.")
-            return
-
         self._btn_prediksi.setEnabled(False)
         self._progress.setVisible(True)
-        self._placeholder.setVisible(True)
-        self._result_widget.setVisible(False)
-        self._placeholder.setText("Melatih model Machine Learning...\nMohon tunggu sebentar.")
+        self._placeholder.setText("Sedang menghitung estimasi...\nMohon tunggu.")
 
         self._worker = PrediksiWorker(self.orders, mode, nama_produk, n_bulan)
         self._worker.finished.connect(self._on_prediksi_selesai)
@@ -467,64 +375,26 @@ class DialogPrediksi(QDialog):
         self._placeholder.setVisible(False)
         self._result_widget.setVisible(True)
 
-        # Plot chart
-        self._canvas_linear.plot_hasil(
-            hasil.linear,
-            warna_pred="#3b82f6",
-            judul=f"Prediksi Revenue: {hasil.nama_target} — Linear Regression"
-        )
-        self._canvas_rf.plot_hasil(
-            hasil.random_forest,
-            warna_pred="#10b981",
-            judul=f"Prediksi Revenue: {hasil.nama_target} — Random Forest"
-        )
+        self._canvas_linear.plot_hasil(hasil.linear, warna_pred="#3498db", judul=f"Proyeksi: {hasil.nama_target}")
+        self._canvas_rf.plot_hasil(hasil.random_forest, warna_pred="#2ecc71", judul=f"Proyeksi Dinamis: {hasil.nama_target}")
         self._canvas_cmp.plot_perbandingan(hasil)
 
-        # Insight
         self._txt_insight.setPlainText(hasil.pesan_insight)
 
-        # Tabel
         self._tabel.setRowCount(0)
-        lin_vals = hasil.linear.nilai_prediksi
-        rf_vals  = hasil.random_forest.nilai_prediksi
-        labels   = hasil.linear.bulan_labels
-
-        for i, lbl in enumerate(labels):
-            r = self._tabel.rowCount()
-            self._tabel.insertRow(r)
-
-            lin_v = lin_vals[i] if i < len(lin_vals) else 0
-            rf_v  = rf_vals[i]  if i < len(rf_vals)  else 0
+        for i, lbl in enumerate(hasil.linear.bulan_labels):
+            r = self._tabel.rowCount(); self._tabel.insertRow(r)
+            lin_v = hasil.linear.nilai_prediksi[i]
+            rf_v  = hasil.random_forest.nilai_prediksi[i]
             sel   = rf_v - lin_v
-
-            items = [
-                lbl,
-                _fmt_currency(lin_v),
-                _fmt_currency(rf_v),
-                f"{'▲' if sel >= 0 else '▼'} {_fmt_currency(abs(sel))}",
-            ]
-            colors = [None, "#dbeafe", "#dcfce7",
-                      "#dcfce7" if sel >= 0 else "#fee2e2"]
-
-            for c, (val, bg) in enumerate(zip(items, colors)):
-                item = QTableWidgetItem(val)
+            
+            vals = [lbl, _fmt_currency(lin_v), _fmt_currency(rf_v), f"{'+' if sel >= 0 else ''}{_fmt_currency(sel)}"]
+            for c, v in enumerate(vals):
+                item = QTableWidgetItem(v)
                 item.setTextAlignment(Qt.AlignCenter)
-                if bg:
-                    item.setBackground(QColor(bg))
                 self._tabel.setItem(r, c, item)
-
-        rek = hasil.rekomendasi_model
-        if rek == "Linear Regression":
-            self._tabs_chart.setTabText(0, "Linear Regression")
-            self._tabs_chart.setTabText(1, "Random Forest")
-        else:
-            self._tabs_chart.setTabText(0, "Linear Regression")
-            self._tabs_chart.setTabText(1, "Random Forest")
 
     @Slot(str)
     def _on_prediksi_error(self, msg: str):
-        self._progress.setVisible(False)
-        self._btn_prediksi.setEnabled(True)
-        self._placeholder.setVisible(True)
-        self._placeholder.setText(f"Gagal menjalankan prediksi:\n\n{msg}")
-        QMessageBox.critical(self, "Error Prediksi ML", f"Terjadi kesalahan:\n\n{msg}")
+        self._progress.setVisible(False); self._btn_predict.setEnabled(True)
+        QMessageBox.critical(self, "Gagal", f"Sistem gagal melakukan analisis: {msg}")

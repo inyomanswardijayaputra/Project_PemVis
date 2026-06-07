@@ -107,27 +107,32 @@ class DialogOrder(QDialog):
         form.addRow("Produk *", self.inp_produk)
 
         self.inp_qty = QSpinBox(); self.inp_qty.setObjectName("inputField")
+        self.inp_qty.setButtonSymbols(QSpinBox.PlusMinus)
         self.inp_qty.setRange(1, 9999); self.inp_qty.setValue(1)
         form.addRow("Quantity *", self.inp_qty)
 
         self.inp_discount = QDoubleSpinBox(); self.inp_discount.setObjectName("inputField")
+        self.inp_discount.setButtonSymbols(QDoubleSpinBox.PlusMinus) 
         self.inp_discount.setRange(0, 999_999_999); self.inp_discount.setDecimals(0)
         self.inp_discount.setPrefix("Rp "); self.inp_discount.setValue(0)
         form.addRow("Discount (Rp)", self.inp_discount)
 
         self.inp_shipping = QDoubleSpinBox(); self.inp_shipping.setObjectName("inputField")
+        self.inp_shipping.setButtonSymbols(QDoubleSpinBox.PlusMinus) 
         self.inp_shipping.setRange(0, 999_999_999); self.inp_shipping.setDecimals(0)
         self.inp_shipping.setPrefix("Rp "); self.inp_shipping.setValue(0)
         form.addRow("Shipping Fee (Rp)", self.inp_shipping)
 
         # Total & Total Sales 
         self.inp_total = QDoubleSpinBox(); self.inp_total.setObjectName("inputField")
+        self.inp_total.setButtonSymbols(QDoubleSpinBox.PlusMinus) 
         self.inp_total.setRange(0, 999_999_999); self.inp_total.setDecimals(0)
         self.inp_total.setPrefix("Rp "); self.inp_total.setReadOnly(True)
         self.inp_total.setToolTip("Auto: (Qty × Harga) − Discount")
         form.addRow("Total (auto)", self.inp_total)
 
         self.inp_total_sales = QDoubleSpinBox(); self.inp_total_sales.setObjectName("inputField")
+        self.inp_total_sales.setButtonSymbols(QDoubleSpinBox.PlusMinus) 
         self.inp_total_sales.setRange(0, 999_999_999); self.inp_total_sales.setDecimals(0)
         self.inp_total_sales.setPrefix("Rp "); self.inp_total_sales.setReadOnly(True)
         self.inp_total_sales.setToolTip("Auto: Total + Shipping Fee")
@@ -139,6 +144,7 @@ class DialogOrder(QDialog):
         form.addRow("Courier *", self.inp_courier)
 
         self.inp_est_days = QSpinBox(); self.inp_est_days.setObjectName("inputField")
+        self.inp_est_days.setButtonSymbols(QSpinBox.PlusMinus) 
         self.inp_est_days.setRange(0, 30); self.inp_est_days.setValue(3)
         self.inp_est_days.setSuffix(" hari")
         form.addRow("Est. Delivery Days", self.inp_est_days)
@@ -150,6 +156,7 @@ class DialogOrder(QDialog):
         form.addRow("Payment Method *", self.inp_payment)
 
         self.inp_rating = QDoubleSpinBox(); self.inp_rating.setObjectName("inputField")
+        self.inp_rating.setButtonSymbols(QDoubleSpinBox.PlusMinus) 
         self.inp_rating.setRange(0, 5); self.inp_rating.setDecimals(1)
         self.inp_rating.setSingleStep(0.1); self.inp_rating.setValue(0)
         self.inp_rating.setSuffix(" / 5")

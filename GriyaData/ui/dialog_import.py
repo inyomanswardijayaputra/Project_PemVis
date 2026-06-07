@@ -143,10 +143,10 @@ class DialogImport(QDialog):
         body = QVBoxLayout(wrap); body.setContentsMargins(20,16,20,8); body.setSpacing(14)
 
         s1 = QFrame()
-        s1.setStyleSheet("QFrame{background:#f0f9ff;border:1.5px solid #bfdbfe;border-radius:8px;}")
+        s1.setStyleSheet("QFrame{background:#ffffff;border:1px solid #d1d5db;border-radius:8px;}")
         l1 = QHBoxLayout(s1); l1.setContentsMargins(16,12,16,12); l1.setSpacing(12)
         lbl_s = QLabel("Pilih file CSV atau Excel (.xlsx / .xls)")
-        lbl_s.setStyleSheet("font-weight:600;color:#1d4ed8;font-size:12px;")
+        lbl_s.setStyleSheet("font-weight:bold;color:#374151;font-size:12px;")
         l1.addWidget(lbl_s, 1)
         self.lbl_file = QLabel("Belum ada file dipilih")
         self.lbl_file.setStyleSheet("color:#6b7280;font-size:11px;")
@@ -159,28 +159,30 @@ class DialogImport(QDialog):
 
         self.frame_map = QFrame()
         self.frame_map.setStyleSheet(
-            "QFrame{background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;}")
+            "QFrame{background:#ffffff;border:1px solid #d1d5db;border-radius:8px;}")
         self.frame_map.setVisible(False)
         mo = QVBoxLayout(self.frame_map); mo.setContentsMargins(16,12,16,14); mo.setSpacing(8)
-        lbl_m = QLabel("Mapping Kolom  —  4 kolom WAJIB + 16 opsional (auto-detect)")
-        lbl_m.setStyleSheet("font-weight:600;color:#92400e;font-size:12px;")
+        lbl_m = QLabel("Konfigurasi Mapping Kolom Data")
+        lbl_m.setStyleSheet("font-weight:bold;color:#111827;font-size:12px;")
         mo.addWidget(lbl_m)
-        hint = QLabel("Kolom opsional yang tidak dipakai → nilai default. "
-                      "Kolom banyak? Scroll ke bawah untuk lihat semua.")
-        hint.setStyleSheet("color:#78350f;font-size:10px;"); hint.setWordWrap(True)
+        hint = QLabel("Pilih kolom yang sesuai dengan format database. Kolom yang tidak dipakai akan diisi nilai default.")
+        hint.setStyleSheet("color:#6b7280;font-size:11px;"); hint.setWordWrap(True)
         mo.addWidget(hint)
-        self.grid_map = QGridLayout(); self.grid_map.setSpacing(6)
+        
+        self.grid_map = QGridLayout(); self.grid_map.setSpacing(10)
         self.grid_map.setColumnStretch(1, 1); self.grid_map.setColumnStretch(3, 1)
         mo.addLayout(self.grid_map)
-        self.chk_auto = QCheckBox("Tambah produk baru otomatis ke tabel products jika belum ada")
+        
+        self.chk_auto = QCheckBox("Buat data produk baru secara otomatis jika belum ada di database")
         self.chk_auto.setChecked(True)
-        self.chk_auto.setStyleSheet("color:#78350f;font-size:10px;font-weight:600;")
+        self.chk_auto.setStyleSheet("color:#374151;font-size:11px;font-weight:600;")
         mo.addWidget(self.chk_auto)
         body.addWidget(self.frame_map)
 
         lbl_pv = QLabel("Preview Data (20 baris pertama):")
-        lbl_pv.setStyleSheet("font-weight:600;color:#374151;font-size:11px;")
+        lbl_pv.setStyleSheet("font-weight:bold;color:#374151;font-size:12px;")
         body.addWidget(lbl_pv)
+        
         self.tbl_prev = QTableWidget()
         self.tbl_prev.setObjectName("dataTable")
         self.tbl_prev.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -191,9 +193,11 @@ class DialogImport(QDialog):
         self.tbl_prev.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
         self.tbl_prev.setMinimumHeight(180)
         body.addWidget(self.tbl_prev, 1)
+        
         self.lbl_info = QLabel("")
-        self.lbl_info.setStyleSheet("color:#6b7280;font-size:10px;")
+        self.lbl_info.setStyleSheet("color:#6b7280;font-size:11px;")
         body.addWidget(self.lbl_info)
+        
         self.progress = QProgressBar(); self.progress.setRange(0,100)
         self.progress.setValue(0); self.progress.setVisible(False)
         body.addWidget(self.progress)
@@ -251,8 +255,8 @@ class DialogImport(QDialog):
             is_req = any(field == f for f,_ in REQUIRED_FIELDS)
             lbl = QLabel(label)
             lbl.setStyleSheet(
-                f"font-size:10px;font-weight:{'700' if is_req else '500'};"
-                f"color:{'#374151' if is_req else '#6b7280'};")
+                f"font-size:11px;font-weight:{'bold' if is_req else 'normal'};"
+                f"color:{'#111827' if is_req else '#4b5563'};")
             lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             lbl.setMinimumWidth(145)
 
@@ -265,7 +269,7 @@ class DialogImport(QDialog):
             if det:
                 combo.setCurrentIndex(cols_in.index(det))
                 combo.setStyleSheet(
-                    "QComboBox{border:1.5px solid #10b981;border-radius:5px;}")
+                    "QComboBox{border:1.5px solid #3b82f6;border-radius:5px;}")
             else:
                 combo.setStyleSheet(
                     "QComboBox{border:1px solid #d1d5db;border-radius:5px;}")
