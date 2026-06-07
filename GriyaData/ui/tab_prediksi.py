@@ -5,7 +5,7 @@ from matplotlib.figure import Figure
 import numpy as np
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
+    QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
     QPushButton, QLabel, QFrame, QComboBox, QSpinBox,
     QProgressBar, QSizePolicy, QMessageBox,
     QTableWidget, QTableWidgetItem, QHeaderView,
@@ -99,7 +99,6 @@ class ForecastCanvas(FigureCanvas):
             f"({'Mingguan' if report.horizon=='weekly' else 'Bulanan'})",
             fontsize=11, fontweight="bold", pad=8)
         ax.legend(fontsize=8, loc="upper left", framealpha=0.9)
-        ax.grid(True, alpha=0.2, ls="--")
         ax.spines[["top", "right"]].set_visible(False)
         self.fig.tight_layout(pad=1.5)
         self.draw()
@@ -109,8 +108,14 @@ class ForecastCanvas(FigureCanvas):
 def _metric_card(title, value, sub, color):
     card = QFrame()
     card.setStyleSheet(f"""
-        QFrame{{background:#fff;border:1.5px solid #e5e7eb;
-                border-left:4px solid {color};border-radius:8px;}}""")
+        QFrame {{
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid {color};
+            border-radius: 8px;
+        }}
+        QLabel {{ border: none; }}
+    """)
     lay = QVBoxLayout(card)
     lay.setContentsMargins(14, 10, 14, 10)
     lay.setSpacing(2)
@@ -134,9 +139,18 @@ class TabPrediksi(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        root = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet("QScrollArea { background-color: transparent; }")
+
+        content_widget = QWidget()
+        root = QVBoxLayout(content_widget)
         root.setContentsMargins(16, 12, 16, 12)
-        root.setSpacing(8)
+        root.setSpacing(12)
 
         # Header
         hdr = QFrame()
@@ -160,11 +174,7 @@ class TabPrediksi(QWidget):
         root.addWidget(hdr)
 
         # Kontrol
-        ctrl = QFrame()
-        ctrl.setStyleSheet(
-            "QFrame{background:#fff;border:1px solid #e5e7eb;border-radius:8px;}")
-        ctrl.setFixedHeight(52)
-        cl = QHBoxLayout(ctrl); cl.setContentsMargins(14, 0, 14, 0); cl.setSpacing(12)
+        cl = QHBoxLayout(); cl.setContentsMargins(4, 0, 4, 0); cl.setSpacing(12)
 
         cl.addWidget(QLabel("Mode:"))
         self.combo_mode = QComboBox(); self.combo_mode.setObjectName("inputField")
@@ -187,9 +197,7 @@ class TabPrediksi(QWidget):
 
         cl.addWidget(QLabel("Periode:"))
         self.spin_periods = QSpinBox(); self.spin_periods.setObjectName("inputField")
-        
         self.spin_periods.setButtonSymbols(QSpinBox.PlusMinus)
-        
         self.spin_periods.setRange(1, 6); self.spin_periods.setValue(3)
         self.spin_periods.setSuffix(" periode"); self.spin_periods.setMinimumWidth(100)
         cl.addWidget(self.spin_periods)
@@ -200,10 +208,11 @@ class TabPrediksi(QWidget):
         self.btn_predict.setMinimumWidth(160)
         self.btn_predict.clicked.connect(self._run_prediction)
         cl.addWidget(self.btn_predict)
-        root.addWidget(ctrl)
+        
+        root.addLayout(cl)
 
-        # Metric cards
-        mw = QWidget(); ml = QHBoxLayout(mw)
+        self.metrics_wrap = QWidget()
+        ml = QHBoxLayout(self.metrics_wrap)
         ml.setContentsMargins(0, 0, 0, 0); ml.setSpacing(8)
         self._c_r2   = _metric_card("R² Score",  "—", "Akurasi model",       "#3b82f6")
         self._c_mae  = _metric_card("MAE",        "—", "Mean Absolute Error", "#f59e0b")
@@ -212,27 +221,27 @@ class TabPrediksi(QWidget):
         for c in (self._c_r2, self._c_mae, self._c_rmse, self._c_acc):
             c.setMinimumHeight(70)
             ml.addWidget(c)
-        root.addWidget(mw)
-
-        splitter = QSplitter(Qt.Vertical)
-        splitter.setChildrenCollapsible(False)
-        splitter.setHandleWidth(6)
+        root.addWidget(self.metrics_wrap)
+        self.metrics_wrap.setVisible(False) 
 
         # Chart
-        chart_wrap = QWidget()
-        cw_lay = QVBoxLayout(chart_wrap)
+        self.chart_wrap = QWidget()
+        cw_lay = QVBoxLayout(self.chart_wrap)
         cw_lay.setContentsMargins(0, 0, 0, 0)
         self._canvas = ForecastCanvas()
+        self._canvas.setMinimumHeight(450) 
         cw_lay.addWidget(self._canvas)
-        splitter.addWidget(chart_wrap)
+        root.addWidget(self.chart_wrap)
+        self.chart_wrap.setVisible(False) 
 
         # Tabel
-        tbl_wrap = QWidget()
-        tw_lay = QVBoxLayout(tbl_wrap)
-        tw_lay.setContentsMargins(0, 4, 0, 0); tw_lay.setSpacing(4)
+        self.tbl_wrap = QWidget()
+        tw_lay = QVBoxLayout(self.tbl_wrap)
+        tw_lay.setContentsMargins(0, 16, 0, 0); tw_lay.setSpacing(8)
         lbl_t = QLabel("Hasil Prediksi")
-        lbl_t.setStyleSheet("font-size:12px;font-weight:700;color:#374151;")
+        lbl_t.setStyleSheet("font-size:14px;font-weight:700;color:#374151;")
         tw_lay.addWidget(lbl_t)
+        
         self.tbl_result = QTableWidget()
         self.tbl_result.setObjectName("dataTable")
         self.tbl_result.setColumnCount(5)
@@ -242,7 +251,7 @@ class TabPrediksi(QWidget):
         ])
         
         self.tbl_result.setStyleSheet("""
-            QTableWidget { border: 1px solid #d1d5db; border-radius: 4px; }
+            QTableWidget { border: 1px solid #d1d5db; border-radius: 4px; background-color: #ffffff; }
             QHeaderView::section { background-color: #f3f4f6; font-weight: bold; color: #374151; padding: 6px; border: none; border-bottom: 1px solid #d1d5db; }
             QTableWidget::item:selected { background-color: #3b82f6; color: white; }
         """)
@@ -253,14 +262,18 @@ class TabPrediksi(QWidget):
         self.tbl_result.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_result.verticalHeader().setVisible(False)
         self.tbl_result.setShowGrid(False)
+        
+        self.tbl_result.setMinimumHeight(140)
+        self.tbl_result.setMaximumHeight(165) 
+
         tw_lay.addWidget(self.tbl_result)
-        splitter.addWidget(tbl_wrap)
+        root.addWidget(self.tbl_wrap)
+        self.tbl_wrap.setVisible(False) 
 
-        splitter.setSizes([999, 999])   
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
+        root.addStretch()
 
-        root.addWidget(splitter, 1)
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
 
         # Status bar
         sb = QFrame()
@@ -274,7 +287,8 @@ class TabPrediksi(QWidget):
         self.progress.setRange(0, 0); self.progress.setVisible(False)
         self.progress.setMaximumWidth(120); self.progress.setMaximumHeight(12)
         sl.addWidget(self.progress)
-        root.addWidget(sb)
+        
+        main_layout.addWidget(sb)
 
     # Data 
     def load_orders(self, orders: list):
@@ -321,7 +335,12 @@ class TabPrediksi(QWidget):
         self.progress.setVisible(False)
         if not report.has_enough_data:
             QMessageBox.information(self, "Data Kurang", report.warning_msg)
-            self.lbl_status.setText(f"  ⚠️  {report.warning_msg}"); return
+            self.lbl_status.setText(f"  {report.warning_msg}"); return
+            
+        self.metrics_wrap.setVisible(True)
+        self.chart_wrap.setVisible(True)
+        self.tbl_wrap.setVisible(True)
+
         self._update_metrics(report.metrics)
         self._update_table(report.predictions)
         self._canvas.plot_forecast(report)
@@ -353,7 +372,7 @@ class TabPrediksi(QWidget):
 
         c = "#10b981" if m.r2 >= 0.7 else "#f59e0b" if m.r2 >= 0.5 else "#ef4444"
         lv = self._c_r2.findChild(QLabel, "__mv")
-        if lv: lv.setStyleSheet(f"font-size:20px;font-weight:700;color:{c};")
+        if lv: lv.setStyleSheet(f"font-size:20px;font-weight:700;color:{c}; border: none;")
 
     def _update_table(self, predictions):
         self.tbl_result.setRowCount(0)

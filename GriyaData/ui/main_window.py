@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_TITLE)
         self.setMinimumSize(1280, 760)
         
-        self.showFullScreen()
+        self.showMaximized()
 
         self.api = APIHandler()
         self._orders: list[OrderRecord] = []

@@ -12,7 +12,7 @@ class LoginWindow(QMainWindow):
         self.API_URL = "https://griyadata-backend-production.up.railway.app/api/login"
         self.initUI()
         
-        self.showFullScreen()
+        self.showMaximized()
         
     def initUI(self):
         outer_widget = QWidget(self)
