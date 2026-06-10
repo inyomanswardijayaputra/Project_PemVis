@@ -1,5 +1,8 @@
+# chart_widget.py
 import matplotlib
-matplotlib.use("Agg")
+# Jangan paksa "Agg" jika menggunakan FigureCanvasQTAgg (Qt). Hapus atau gunakan "QtAgg" jika perlu.
+# matplotlib.use("QtAgg")  # opsional, biasanya tidak perlu jika environment sudah benar
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -9,8 +12,19 @@ from PySide6.QtWidgets import (
     QComboBox, QLabel, QFileDialog, QFrame, QMessageBox,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
 
 from utils import CHART_TYPES
+
+# Pastikan rcParams memiliki ukuran font > 0
+matplotlib.rcParams.update({
+    "font.size": 10,
+    "axes.titlesize": 13,
+    "axes.labelsize": 10,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "font.family": "DejaVu Sans",  # atau "Arial" jika tersedia
+})
 
 PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
            "#ec4899", "#ef4444", "#06b6d4", "#84cc16"]
@@ -18,9 +32,14 @@ PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
 
 class ChartCanvas(FigureCanvas):
     def __init__(self, parent=None):
+        # buat Figure seperti biasa
         self.fig = Figure(figsize=(8, 4.5), facecolor="#ffffff")
         super().__init__(self.fig)
         self.setParent(parent)
+
+        # Set font Qt pada widget canvas agar Qt tidak mengeluh
+        default_font = QFont("Arial", 10)
+        self.setFont(default_font)
 
     def clear(self):
         self.fig.clear()
@@ -78,6 +97,7 @@ class ChartWidget(QWidget):
 
     def refresh(self):
         idx = self.combo_chart.currentIndex()
+        # clear figure and create a fresh axis
         self.canvas.fig.clear()
         ax = self.canvas.fig.add_subplot(111)
         ax.set_facecolor("#f9fafb")
@@ -93,10 +113,19 @@ class ChartWidget(QWidget):
         draw_fn = chart_map.get(idx)
         if draw_fn and self._data:
             draw_fn(ax)
+        else:
+            if not self._data:
+                ax.text(0.5, 0.5, "Belum ada data", ha="center", va="center",
+                        transform=ax.transAxes, color="#9ca3af")
 
-        self.canvas.fig.tight_layout(pad=2)
+        # try/except karena tight_layout kadang memicu warning pada beberapa backend
+        try:
+            self.canvas.fig.tight_layout(pad=2)
+        except Exception:
+            pass
         self.canvas.draw()
 
+    # --- Chart functions (sama seperti sebelumnya, pastikan fontsize > 0) ---
     def _draw_bar_kategori(self, ax):
         data = self._data.get("revenue_by_kategori", {})
         if not data:
@@ -113,7 +142,7 @@ class ChartWidget(QWidget):
                      fontweight="bold", color="#1a1a1a", pad=12)
         ax.set_ylabel("Revenue (Juta Rp)", fontsize=10, color="#6b7280")
         ax.set_xlabel("Kategori", fontsize=10, color="#6b7280")
-        ax.tick_params(colors="#6b7280", labelsize=8)
+        ax.tick_params(colors="#6b7280", labelsize=9)
         ax.yaxis.grid(True, linestyle="--", alpha=0.5, color="#e5e7eb", zorder=0)
         ax.set_axisbelow(True)
         for spine in ax.spines.values():
@@ -164,7 +193,7 @@ class ChartWidget(QWidget):
                      fontweight="bold", color="#1a1a1a", pad=12)
         ax.set_ylabel("Revenue (Juta Rp)", fontsize=10, color="#6b7280")
         ax.set_xlabel("Bulan", fontsize=10, color="#6b7280")
-        ax.tick_params(axis="x", rotation=45, colors="#6b7280", labelsize=8)
+        ax.tick_params(axis="x", rotation=45, colors="#6b7280", labelsize=9)
         ax.tick_params(axis="y", colors="#6b7280", labelsize=9)
         ax.yaxis.grid(True, linestyle="--", alpha=0.5, color="#e5e7eb", zorder=0)
         ax.set_axisbelow(True)
@@ -186,6 +215,7 @@ class ChartWidget(QWidget):
         ax.set_title("Total Unit Terjual per Metode Pembayaran", fontsize=13,
                      fontweight="bold", color="#1a1a1a", pad=12)
         ax.set_ylabel("Unit Terjual", fontsize=10, color="#6b7280")
+        ax.set_xlabel("", fontsize=10, color="#6b7280")
         ax.tick_params(colors="#6b7280", labelsize=9)
         ax.yaxis.grid(True, linestyle="--", alpha=0.5, color="#e5e7eb", zorder=0)
         ax.set_axisbelow(True)
@@ -207,11 +237,11 @@ class ChartWidget(QWidget):
 
         bars = ax.barh(labels, values, color="#3b82f6", edgecolor="white",
                        linewidth=1, zorder=3)
-        
+
         ax.set_title("Top 10 Produk Furniture by Revenue", fontsize=13,
                      fontweight="bold", color="#1a1a1a", pad=12)
         ax.set_xlabel("Revenue (Juta Rp)", fontsize=10, color="#6b7280")
-        ax.tick_params(colors="#6b7280", labelsize=8)
+        ax.tick_params(colors="#6b7280", labelsize=9)
         ax.xaxis.grid(True, linestyle="--", alpha=0.5, color="#e5e7eb", zorder=0)
         ax.set_axisbelow(True)
         for spine in ax.spines.values():
@@ -232,9 +262,7 @@ class ChartWidget(QWidget):
         if not path:
             return
         try:
-            self.canvas.fig.savefig(path, dpi=150, bbox_inches="tight",
-                                    facecolor="#ffffff")
-            QMessageBox.information(self, "Export Berhasil",
-                                    f"Chart berhasil disimpan:\n{path}")
+            self.canvas.fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="#ffffff")
+            QMessageBox.information(self, "Export Berhasil", f"Chart berhasil disimpan:\n{path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Gagal", str(e))

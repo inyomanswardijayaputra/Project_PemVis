@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use("Agg")
+#matplotlib.use("Agg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import numpy as np

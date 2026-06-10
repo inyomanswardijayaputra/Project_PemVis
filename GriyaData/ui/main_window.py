@@ -1,12 +1,14 @@
+# main_window.py
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QPushButton, QLabel, QFrame, QComboBox, QDialog,
     QMessageBox, QSizePolicy, QLineEdit, QFormLayout,
-    QDialogButtonBox, QSpacerItem, QSizePolicy as QSP, QToolButton
+    QDialogButtonBox, QSpacerItem, QSizePolicy as QSP, QToolButton,
+    QMenu
 )
-from PySide6.QtCore import Qt, Slot, QThread, Signal, QTimer
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtCore import Qt, Slot, QThread, Signal, QTimer, QPoint
+from PySide6.QtGui import QAction, QColor, QFont
 
 from core.api_handler import APIHandler, OrderRecord, ProductRecord
 from utils import Formatter
@@ -47,12 +49,14 @@ class FilterWorker(QThread):
         op = p.get("op", "All")
         val = p.get("value")
         kw = (p.get("keyword") or "").strip().lower()
+        exact = bool(p.get("exact", False))
 
         # numeric filter
         if col_type == "number" and val is not None and op != "All":
             filtered = []
             for o in out:
                 try:
+                    # try numeric attribute first; fallback to 0
                     num = float(getattr(o, col_key, 0) or 0)
                 except Exception:
                     continue
@@ -60,9 +64,12 @@ class FilterWorker(QThread):
                 if op == "=" and num == val: filtered.append(o)
                 if op == ">" and num > val: filtered.append(o)
             out = filtered
-        # text filter
+        # text filter (robust: cast attribute to string)
         elif col_type == "text" and kw:
-            out = [o for o in out if kw in str(getattr(o, col_key, "") or "").lower()]
+            if exact:
+                out = [o for o in out if str(getattr(o, col_key, "") or "").strip().lower() == kw]
+            else:
+                out = [o for o in out if kw in str(getattr(o, col_key, "") or "").lower()]
         return out
 
     def _filter_products(self, prods, p):
@@ -74,7 +81,7 @@ class FilterWorker(QThread):
         kw = (p.get("keyword") or "").strip().lower()
         category = p.get("category", None)
 
-        if col_type == "category" and category and category != "All":
+        if col_key == "category" and category and category != "All":
             out = [x for x in out if (x.category or "") == category]
         elif col_type == "number" and val is not None and op != "All":
             filtered = []
@@ -123,6 +130,7 @@ class DialogProduk(QDialog):
 
         title = QLabel("Tambah Produk Baru" if p is None else f"Edit Produk ID {p.id}")
         title.setObjectName("dialogTitle")
+        title.setStyleSheet("font-size:14px; font-weight:700;")
         lay.addWidget(title)
 
         form = QFormLayout(); form.setSpacing(10)
@@ -189,6 +197,24 @@ class MainWindow(QMainWindow):
         # running workers keep references to avoid GC
         self._running_workers = []
 
+        # cache unique values per column to avoid recomputing on every click
+        self._unique_cache: dict[str, list[str]] = {}
+
+        # columns that are considered enum-like for orders and products
+        self._order_enum_columns = {
+            "product_name",
+            "status",
+            "category",
+            "payment_method",
+            "courier",
+            "sales_channel",
+            "customer_city",
+            "customer_gender",
+        }
+        self._product_enum_columns = {
+            "category",
+        }
+
         self._build_menu()
         self._build_ui()
         self._build_statusbar()
@@ -202,9 +228,6 @@ class MainWindow(QMainWindow):
 
     def _mark_valid(self, widget: QLineEdit):
         widget.setStyleSheet("")  # reset
-        # clear status only if it was an invalid-number message
-        # (we keep other status messages intact)
-        # simple heuristic: if status contains 'angka' remove it
         if "angka" in self.lbl_status.text().lower():
             self.lbl_status.setText("")
 
@@ -256,6 +279,16 @@ class MainWindow(QMainWindow):
         self._build_tab_products()
         self._build_tab_prediksi()
 
+        # global stylesheet tweaks to avoid empty font-size in some widgets
+        self.setStyleSheet("""
+            QLabel { font-size: 12px; }
+            QToolButton { padding: 4px 8px; }
+            QPushButton#btnPrimary { background:#2563eb; color:white; padding:6px 12px; border-radius:6px; }
+            QPushButton#btnPrimary:hover { background:#1e40af; }
+            QPushButton#btnSecondary { background:#e5e7eb; padding:6px 12px; border-radius:6px; }
+            QLineEdit#inputField { padding:6px; }
+        """)
+
     def _make_banner(self):
         b = QFrame(); b.setObjectName("banner")
         lay = QHBoxLayout(b); lay.setContentsMargins(20,12,20,12)
@@ -283,7 +316,10 @@ class MainWindow(QMainWindow):
             cl.addWidget(c)
         root.addLayout(cl)
         self._dash_chart = ChartWidget()
-        self._dash_chart.combo_chart.setCurrentIndex(2)
+        try:
+            self._dash_chart.combo_chart.setCurrentIndex(2)
+        except Exception:
+            pass
         root.addWidget(self._dash_chart, 1)
         self.tabs.addTab(tab, "Dashboard")
 
@@ -313,7 +349,7 @@ class MainWindow(QMainWindow):
         # Column selector (left)
         left = QHBoxLayout(); left.setSpacing(6)
         self.order_col_cb = QComboBox()
-        ORDER_FILTER_COLS = [
+        self._order_filter_cols = [
             ("ID DB", "id", "number"),
             ("Order ID", "order_id", "text"),
             ("Pelanggan", "customer_name", "text"),
@@ -336,15 +372,23 @@ class MainWindow(QMainWindow):
             ("Rating", "customer_rating", "number"),
             ("Sales Date", "sales_date", "text"),
         ]
-        for label, key, typ in ORDER_FILTER_COLS:
+        for label, key, typ in self._order_filter_cols:
             self.order_col_cb.addItem(label, (key, typ))
         self.order_col_cb.currentIndexChanged.connect(self._on_order_col_changed)
         left.addWidget(QLabel("Kolom:")); left.addWidget(self.order_col_cb)
+
+        # value dropdown for text columns (NEW)
+        self.order_value_cb = QComboBox()
+        self.order_value_cb.setVisible(False)
+        self.order_value_cb.setObjectName("inputField")
+        self.order_value_cb.currentTextChanged.connect(lambda _: self._order_timer.start())
+        left.addWidget(self.order_value_cb)
 
         # numeric controls (hidden by default)
         self.order_num_op = QComboBox(); self.order_num_op.addItems(["All","<","=" ,">"])
         self.order_num_op.setMinimumWidth(80); self.order_num_op.currentTextChanged.connect(lambda _: self._order_timer.start())
         self.order_num_input = QLineEdit(); self.order_num_input.setPlaceholderText("Angka")
+        self.order_num_input.setObjectName("inputField")
         # connect validation + debounce
         self.order_num_input.textChanged.connect(lambda _: (self._validate_and_parse_number(self.order_num_input), self._order_timer.start()))
         left.addWidget(self.order_num_op); left.addWidget(self.order_num_input)
@@ -356,6 +400,7 @@ class MainWindow(QMainWindow):
         # Right: text search + help + actions
         right = QHBoxLayout(); right.setSpacing(8)
         self.order_text_search = QLineEdit(); self.order_text_search.setPlaceholderText("Kata kunci (untuk kolom teks)")
+        self.order_text_search.setObjectName("inputField")
         self.order_text_search.textChanged.connect(lambda _: self._order_timer.start())
         self._order_timer.timeout.connect(self._start_order_worker)
         right.addWidget(self.order_text_search)
@@ -366,9 +411,18 @@ class MainWindow(QMainWindow):
         right.addWidget(btn_help)
 
         btn_ref = QPushButton("Refresh"); btn_ref.clicked.connect(self.refresh_all)
+        btn_ref.setObjectName("btnSecondary")
         right.addWidget(btn_ref)
+
         btn_add = QPushButton("Tambah Data Pesanan"); btn_add.setObjectName("btnPrimary"); btn_add.clicked.connect(self._tambah_order)
         right.addWidget(btn_add)
+
+        # Edit / Delete buttons for orders
+        self.btn_edit = QPushButton("Edit"); self.btn_edit.setEnabled(False); self.btn_edit.clicked.connect(self._edit_order)
+        self.btn_edit.setObjectName("btnSecondary"); right.addWidget(self.btn_edit)
+        self.btn_del = QPushButton("Hapus"); self.btn_del.setEnabled(False); self.btn_del.clicked.connect(self._hapus_order)
+        self.btn_del.setObjectName("btnSecondary"); right.addWidget(self.btn_del)
+
         top.addLayout(right)
 
         root.addLayout(top)
@@ -386,6 +440,7 @@ class MainWindow(QMainWindow):
         hdr = self.table.horizontalHeader()
         hdr.setSectionResizeMode(QHeaderView.ResizeToContents)
         hdr.setMinimumSectionSize(60)
+        hdr.sectionClicked.connect(self._on_header_clicked)  # header click -> menu for enum columns
         self.table.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -406,6 +461,71 @@ class MainWindow(QMainWindow):
         # init visibility
         self._on_order_col_changed(0)
 
+    # Ganti fungsi _on_header_clicked (Orders)
+    def _on_header_clicked(self, logicalIndex: int):
+        if logicalIndex < 0 or logicalIndex >= len(self._order_filter_cols):
+            return
+
+        # set ComboBox Kolom sesuai header yang diklik tanpa memicu signal change handler
+        try:
+            self.order_col_cb.blockSignals(True)
+            self.order_col_cb.setCurrentIndex(logicalIndex)
+        finally:
+            self.order_col_cb.blockSignals(False)
+
+        # panggil handler yang sudah ada untuk memperbarui visibility input (text/number/value dropdown)
+        # _on_order_col_changed akan memicu rebuild value dropdown dan start timer
+        self._on_order_col_changed(logicalIndex)
+
+        # lanjutkan menampilkan menu enum (sebelumnya ada di fungsi lama)
+        label, col_key, col_type = self._order_filter_cols[logicalIndex]
+
+        # hanya tampilkan menu enum untuk kolom yang memang enum-like
+        if col_key not in self._order_enum_columns:
+            return
+
+        vals = self._unique_cache.get(col_key)
+        if vals is None:
+            vals = sorted({(str(getattr(o, col_key, "") or "")).strip() for o in self._orders if getattr(o, col_key, None) not in (None, "")})
+            self._unique_cache[col_key] = vals
+
+        menu = QMenu(self)
+        menu.addAction("All")
+        if vals:
+            menu.addSeparator()
+            MAX_ITEMS = 500
+            for v in vals[:MAX_ITEMS]:
+                menu.addAction(v)
+
+        header = self.table.horizontalHeader()
+        x = header.sectionViewportPosition(logicalIndex)
+        y = header.height()
+        global_pos = header.viewport().mapToGlobal(QPoint(x, y))
+        action = menu.exec(global_pos)
+
+        if action:
+            text = action.text()
+            if text == "All":
+                if hasattr(self, "order_value_cb") and self.order_value_cb.isVisible():
+                    self.order_value_cb.blockSignals(True)
+                    self.order_value_cb.setCurrentIndex(0)
+                    self.order_value_cb.blockSignals(False)
+                self.order_text_search.setText("")
+            else:
+                if hasattr(self, "order_value_cb") and self.order_value_cb.isVisible():
+                    idx = self.order_value_cb.findText(text)
+                    if idx == -1:
+                        self.order_value_cb.blockSignals(True)
+                        self.order_value_cb.insertItem(1, text)
+                        self.order_value_cb.setCurrentText(text)
+                        self.order_value_cb.blockSignals(False)
+                    else:
+                        self.order_value_cb.setCurrentIndex(idx)
+                self.order_text_search.setText(text)
+            self._order_timer.start()
+
+
+
     def _on_order_col_changed(self, idx):
         data = self.order_col_cb.itemData(idx)
         if not data:
@@ -416,35 +536,75 @@ class MainWindow(QMainWindow):
         self.order_num_op.setVisible(is_number)
         self.order_num_input.setVisible(is_number)
         self.order_text_search.setVisible(not is_number)
+
+        # show value dropdown for text columns (populate only if column is text)
+        if typ == "text":
+            col_key, _ = self.order_col_cb.itemData(idx)
+            vals = self._unique_cache.get(col_key)
+            if vals is None:
+                vals = sorted({(str(getattr(o, col_key, "") or "")).strip() for o in self._orders if getattr(o, col_key, None) not in (None, "")})
+                self._unique_cache[col_key] = vals
+            self.order_value_cb.blockSignals(True)
+            self.order_value_cb.clear()
+            self.order_value_cb.addItem("All")
+            for v in vals:
+                self.order_value_cb.addItem(v)
+            self.order_value_cb.blockSignals(False)
+            self.order_value_cb.setVisible(True)
+        else:
+            self.order_value_cb.setVisible(False)
+
         self._order_timer.start()
 
     def _start_order_worker(self):
         idx = self.order_col_cb.currentIndex()
         col_key, col_type = self.order_col_cb.itemData(idx)
-        # validate numeric input if needed
         val = None
+        exact = False
         if col_type == "number":
             val = self._validate_and_parse_number(self.order_num_input)
+
+        if col_type == "text" and self.order_value_cb.isVisible():
+            sel = self.order_value_cb.currentText()
+            if sel and sel != "All":
+                exact = True
+                keyword = sel.strip().lower()
+            else:
+                keyword = self.order_text_search.text().strip().lower()
+        else:
+            keyword = self.order_text_search.text().strip().lower()
+
         params = {
             "col_key": col_key,
             "col_type": col_type,
             "op": self.order_num_op.currentText(),
             "value": val,
-            "keyword": self.order_text_search.text().strip().lower(),
-            "category": None
+            "keyword": keyword,
+            "category": None,
+            "exact": exact,
         }
         worker = FilterWorker(self._orders, "orders", params)
-        worker.finished.connect(self._on_order_worker_finished)
+        worker.finished.connect(lambda res, w=worker: self._on_order_worker_finished_with_cleanup(res, w))
         worker.error.connect(self._on_worker_error)
         self._running_workers.append(worker)
         worker.start()
 
+    def _on_order_worker_finished_with_cleanup(self, filtered, worker):
+        try:
+            self._on_order_worker_finished(filtered)
+        finally:
+            try:
+                worker.quit()
+            except Exception:
+                pass
+            worker.deleteLater()
+            self._running_workers = [w for w in self._running_workers if w.isRunning()]
+
     def _on_order_worker_finished(self, filtered):
         self._fill_order_table(filtered)
         self.lbl_status.setText(f"{len(filtered)} pesanan ditampilkan.")
-        self._running_workers = [w for w in self._running_workers if w.isRunning()]
 
-    # ---------------- Products Tab (with numeric validation) ----------------
+    # ---------------- Products Tab (with numeric validation + header enum filter) ----------------
     def _build_tab_products(self):
         tab = QWidget(); tab.setObjectName("tabProduk")
         root = QVBoxLayout(tab); root.setContentsMargins(16,14,16,14); root.setSpacing(8)
@@ -471,6 +631,7 @@ class MainWindow(QMainWindow):
         self.prod_num_op = QComboBox(); self.prod_num_op.addItems(["All","<","=" ,">"])
         self.prod_num_op.setMinimumWidth(80); self.prod_num_op.currentTextChanged.connect(lambda _: self._prod_timer.start())
         self.prod_num_input = QLineEdit(); self.prod_num_input.setPlaceholderText("Angka")
+        self.prod_num_input.setObjectName("inputField")
         # connect validation + debounce
         self.prod_num_input.textChanged.connect(lambda _: (self._validate_and_parse_number(self.prod_num_input), self._prod_timer.start()))
         top.addWidget(self.prod_num_op); top.addWidget(self.prod_num_input)
@@ -478,7 +639,8 @@ class MainWindow(QMainWindow):
         top.addItem(QSpacerItem(20, 10, QSP.Expanding, QSP.Minimum))
 
         # text search + help
-        self.prod_text_search = QLineEdit(); self.prod_text_search.setPlaceholderText("Kata kunci (untuk kolom teks)")
+        self.prod_text_search = QLineEdit(); self.prod_text_search.setPlaceholderText("Kata kunci (teks)")
+        self.prod_text_search.setObjectName("inputField")
         self.prod_text_search.textChanged.connect(lambda _: self._prod_timer.start())
         self._prod_timer.timeout.connect(self._start_prod_worker)
         top.addWidget(self.prod_text_search)
@@ -488,9 +650,16 @@ class MainWindow(QMainWindow):
         top.addWidget(btn_help_p)
 
         btn_ref = QPushButton("Refresh"); btn_ref.clicked.connect(self._load_products)
+        btn_ref.setObjectName("btnSecondary")
         top.addWidget(btn_ref)
         btn_add = QPushButton("Tambah Produk"); btn_add.setObjectName("btnPrimary"); btn_add.clicked.connect(self._tambah_produk)
         top.addWidget(btn_add)
+
+        # Edit / Delete buttons for products
+        self.btn_edit_prod = QPushButton("Edit"); self.btn_edit_prod.setEnabled(False); self.btn_edit_prod.clicked.connect(self._edit_produk)
+        self.btn_edit_prod.setObjectName("btnSecondary"); top.addWidget(self.btn_edit_prod)
+        self.btn_del_prod = QPushButton("Hapus"); self.btn_del_prod.setEnabled(False); self.btn_del_prod.clicked.connect(self._hapus_produk)
+        self.btn_del_prod.setObjectName("btnSecondary"); top.addWidget(self.btn_del_prod)
 
         root.addLayout(top)
 
@@ -499,9 +668,12 @@ class MainWindow(QMainWindow):
         pcols = ["ID", "Product Name", "Category", "Price"]
         self.tbl_prod.setColumnCount(len(pcols))
         self.tbl_prod.setHorizontalHeaderLabels(pcols)
-        self.tbl_prod.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tbl_prod.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        hdr = self.tbl_prod.horizontalHeader()
+        hdr.setSectionResizeMode(QHeaderView.Stretch)
+        hdr.setSectionResizeMode(0, QHeaderView.Fixed)
         self.tbl_prod.setColumnWidth(0, 50)
+        # connect header click for product enum columns (category)
+        hdr.sectionClicked.connect(self._on_prod_header_clicked)
         self.tbl_prod.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_prod.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tbl_prod.setAlternatingRowColors(True)
@@ -514,6 +686,68 @@ class MainWindow(QMainWindow):
 
         # init visibility
         self._on_prod_col_changed(0)
+
+    # Ganti/isi fungsi _on_prod_header_clicked (Products)
+    def _on_prod_header_clicked(self, logicalIndex: int):
+        # Map header index ke index ComboBox prod_col_cb
+        # table columns: 0: ID, 1: Product Name, 2: Category, 3: Price
+        header_to_combo = {1: 0, 2: 1, 3: 2}
+        if logicalIndex not in header_to_combo:
+            return
+
+        combo_idx = header_to_combo[logicalIndex]
+        try:
+            self.prod_col_cb.blockSignals(True)
+            self.prod_col_cb.setCurrentIndex(combo_idx)
+        finally:
+            self.prod_col_cb.blockSignals(False)
+
+        # panggil handler yang sudah ada untuk memperbarui visibility input (text/number/category dropdown)
+        self._on_prod_col_changed(combo_idx)
+
+        # jika kolom Category diklik, tampilkan menu enum seperti di orders
+        if logicalIndex != 2:
+            return
+
+        col_key = "category"
+        vals = self._unique_cache.get(col_key)
+        if vals is None:
+            if hasattr(self, "_products") and getattr(self, "_products", None):
+                vals = sorted({(str(p.category or "")).strip() for p in self._products if p.category})
+            else:
+                vals = sorted({self.tbl_prod.item(r, 2).text().strip() for r in range(self.tbl_prod.rowCount()) if self.tbl_prod.item(r, 2) and self.tbl_prod.item(r, 2).text().strip()})
+            self._unique_cache[col_key] = vals
+
+        menu = QMenu(self)
+        menu.addAction("All")
+        if vals:
+            menu.addSeparator()
+            for v in vals:
+                menu.addAction(v)
+
+        header = self.tbl_prod.horizontalHeader()
+        x = header.sectionViewportPosition(logicalIndex)
+        y = header.height()
+        global_pos = header.viewport().mapToGlobal(QPoint(x, y))
+        action = menu.exec(global_pos)
+
+        if action:
+            text = action.text()
+            if text == "All":
+                self.prod_cat_cb.blockSignals(True)
+                self.prod_cat_cb.setCurrentIndex(0)
+                self.prod_cat_cb.blockSignals(False)
+            else:
+                idx = self.prod_cat_cb.findText(text)
+                if idx == -1:
+                    self.prod_cat_cb.blockSignals(True)
+                    self.prod_cat_cb.addItem(text)
+                    self.prod_cat_cb.setCurrentText(text)
+                    self.prod_cat_cb.blockSignals(False)
+                else:
+                    self.prod_cat_cb.setCurrentIndex(idx)
+            self._prod_timer.start()
+
 
     def _on_prod_col_changed(self, idx):
         _, typ = self.prod_col_cb.itemData(idx)
@@ -547,19 +781,31 @@ class MainWindow(QMainWindow):
             "category": self.prod_cat_cb.currentText() if hasattr(self, "prod_cat_cb") else "All"
         }
         worker = FilterWorker(prods, "products", params)
-        worker.finished.connect(self._on_prod_worker_finished)
+        worker.finished.connect(lambda res, w=worker: self._on_prod_worker_finished_with_cleanup(res, w))
         worker.error.connect(self._on_worker_error)
         self._running_workers.append(worker)
         worker.start()
+
+    def _on_prod_worker_finished_with_cleanup(self, filtered, worker):
+        try:
+            self._on_prod_worker_finished(filtered)
+        finally:
+            try:
+                worker.quit()
+            except Exception:
+                pass
+            worker.deleteLater()
+            self._running_workers = [w for w in self._running_workers if w.isRunning()]
 
     def _on_prod_worker_finished(self, filtered):
         self.tbl_prod.setRowCount(0)
         for p in filtered:
             r = self.tbl_prod.rowCount(); self.tbl_prod.insertRow(r)
             for c, v in enumerate([str(p.id), p.product_name, p.category, Formatter.currency(p.price)]):
-                item = QTableWidgetItem(v); item.setTextAlignment(Qt.AlignCenter); self.tbl_prod.setItem(r, c, item)
+                item = QTableWidgetItem(v); item.setTextAlignment(Qt.AlignCenter)
+                item.setFont(QFont("Segoe UI", 10))
+                self.tbl_prod.setItem(r, c, item)
         self.lbl_status.setText(f"{len(filtered)} produk ditampilkan.")
-        self._running_workers = [w for w in self._running_workers if w.isRunning()]
 
     # ---------------- Prediksi Tab ----------------
     def _build_tab_prediksi(self):
@@ -577,15 +823,29 @@ class MainWindow(QMainWindow):
     # ---------------- Loaders and table fill ----------------
     def refresh_all(self):
         self.lbl_status.setText("Mengambil data dari API...")
+        # loader in background
         self._loader = DataLoader(self.api)
-        self._loader.finished.connect(self._on_data_loaded)
+        self._loader.finished.connect(self._on_data_loaded_with_cleanup)
         self._loader.error.connect(self._on_data_error)
         self._loader.start()
         self._load_products()
 
+    def _on_data_loaded_with_cleanup(self, orders):
+        try:
+            self._on_data_loaded(orders)
+        finally:
+            try:
+                self._loader.quit()
+            except Exception:
+                pass
+            self._loader.deleteLater()
+            self._loader = None
+
     @Slot(list)
     def _on_data_loaded(self, orders):
         self._orders = orders
+        # clear unique cache because data changed
+        self._unique_cache.clear()
         # start worker to apply current filters
         self._start_order_worker()
         stats = self.api.summary_stats(orders)
@@ -646,19 +906,18 @@ class MainWindow(QMainWindow):
             for c, v in enumerate(vals):
                 item = QTableWidgetItem(v)
                 item.setTextAlignment(Qt.AlignCenter)
+                item.setFont(QFont("Segoe UI", 10))
                 if bg: item.setBackground(QColor(bg))
                 self.table.setItem(r, c, item)
 
     def _load_products(self):
         prods = self.api.get_products()
-        self.api._products_cache = prods
         cats = sorted({(p.category or "").strip() for p in prods if (p.category or "").strip()})
         self.prod_cat_cb.blockSignals(True)
         self.prod_cat_cb.clear()
         self.prod_cat_cb.addItem("All")
         for c in cats: self.prod_cat_cb.addItem(c)
         self.prod_cat_cb.blockSignals(False)
-        # start worker to apply current product filters
         self._start_prod_worker()
 
     # ---------------- CRUD helpers (use existing implementations) ----------------
@@ -681,7 +940,7 @@ class MainWindow(QMainWindow):
         row = self.tbl_prod.currentRow()
         if row < 0: return None
         pid = int(self.tbl_prod.item(row, 0).text())
-        for p in self.api._products_cache:
+        for p in getattr(self.api, "_products_cache", []) or []:
             if p.id == pid: return p
         return None
 
@@ -783,8 +1042,11 @@ class MainWindow(QMainWindow):
     def _logout(self):
         if QMessageBox.question(self, "Logout", "Yakin ingin keluar?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
             self.close()
-            from ui.login_window import LoginWindow
-            self._lw = LoginWindow(); self._lw.show()
+            try:
+                from ui.login_window import LoginWindow
+                self._lw = LoginWindow(); self._lw.show()
+            except Exception:
+                pass
 
     # ---------------- Worker error handler ----------------
     def _on_worker_error(self, msg):
@@ -796,8 +1058,9 @@ class MainWindow(QMainWindow):
             text = (
                 "Petunjuk Pencarian Pesanan\n\n"
                 "- Pilih kolom yang ingin dicari dari dropdown 'Kolom'.\n"
-                "- Jika kolom bertipe teks (mis. Pelanggan, Produk, Kota), ketik kata kunci di kotak 'Kata kunci'.\n"
-                "- Pencarian teks bersifat case-insensitive dan mencari substring (ketik sebagian kata cukup).\n"
+                "- Jika kolom bertipe teks (mis. Pelanggan, Produk, Kota), ketik kata kunci di kotak 'Kata kunci' atau pilih nilai dari dropdown di sebelah kolom untuk exact-match.\n"
+                "- Untuk kolom enum (status, category, payment_method, courier, sales_channel, customer_city, product_name), klik header kolom untuk menampilkan daftar nilai yang tersedia.\n"
+                "- Pencarian teks bersifat case-insensitive dan mencari substring kecuali Anda memilih nilai dari dropdown (exact-match).\n"
                 "- Jika kolom bertipe numerik (mis. Price, Total Sales, Qty), pilih operator (<, =, >) lalu masukkan angka.\n"
                 "- Jika input angka berwarna merah, berarti tidak valid dan filter numerik akan diabaikan.\n"
                 "- Hasil akan muncul otomatis setelah 300 ms dari input terakhir.\n"
@@ -807,7 +1070,7 @@ class MainWindow(QMainWindow):
             text = (
                 "Petunjuk Pencarian Produk\n\n"
                 "- Pilih kolom yang ingin difilter: Product Name, Category, atau Price.\n"
-                "- Untuk Category: pilih kategori dari dropdown (exact match).\n"
+                "- Untuk Category: pilih kategori dari dropdown atau klik header kolom 'Category' untuk daftar nilai.\n"
                 "- Untuk Price: pilih operator (<, =, >) lalu masukkan angka.\n"
                 "- Untuk Product Name: ketik kata kunci (substring, case-insensitive).\n"
                 "- Jika input angka berwarna merah, berarti tidak valid dan filter numerik akan diabaikan.\n"
@@ -815,3 +1078,12 @@ class MainWindow(QMainWindow):
                 "- Tombol Refresh memuat ulang daftar produk dari API."
             )
         QMessageBox.information(self, "Petunjuk Filter & Pencarian", text)
+
+# If run as script (for quick testing)
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+    app.setFont(QFont("Segoe UI", 10))
+    w = MainWindow("Admin")
+    w.show()
+    sys.exit(app.exec())
