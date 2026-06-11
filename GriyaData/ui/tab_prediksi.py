@@ -143,23 +143,16 @@ class TabPrediksi(QWidget):
         root.setSpacing(12)
 
         hdr = QFrame()
-        hdr.setStyleSheet("""QFrame{
-            background:qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                stop:0 #1e3a5f,stop:1 #0f766e);
-            border-radius:10px;}""")
+     
         hdr.setFixedHeight(56)
         hl = QHBoxLayout(hdr); hl.setContentsMargins(18, 0, 18, 0)
         rv = QVBoxLayout(); rv.setSpacing(1); rv.setAlignment(Qt.AlignVCenter)
         t1 = QLabel("Prediksi Penjualan — Random Forest ML")
-        t1.setStyleSheet("font-size:14px;font-weight:700;color:#fff;")
+        t1.setStyleSheet("font-size:14px;font-weight:700;color:#000000;")
         t2 = QLabel("Forecast unit & revenue per produk / semua produk")
-        t2.setStyleSheet("font-size:10px;color:#94d3c8;")
+        t2.setStyleSheet("font-size:10px;color:#000000;")
         rv.addWidget(t1); rv.addWidget(t2)
         hl.addLayout(rv); hl.addStretch()
-        badge = QLabel("PROYEKSI AKTIF")
-        badge.setStyleSheet("""background:#10b981;color:#fff;font-size:10px;
-            font-weight:700;padding:3px 10px;border-radius:12px;""")
-        hl.addWidget(badge)
         root.addWidget(hdr)
 
         cl = QHBoxLayout(); cl.setContentsMargins(4, 0, 4, 0); cl.setSpacing(12)

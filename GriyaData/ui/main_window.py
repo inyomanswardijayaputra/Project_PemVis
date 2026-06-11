@@ -142,7 +142,7 @@ class DialogProduk(QDialog):
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.button(QDialogButtonBox.Ok).setText("Simpan")
         btns.button(QDialogButtonBox.Ok).setObjectName("btnPrimary")
-        btns.button(QDialogButtonBox.Cancel).setObjectName("btnSecondary")
+        btns.button(QDialogButtonBox.Cancel).setObjectName("btnDanger")
         btns.accepted.connect(self._validate)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)
@@ -257,15 +257,6 @@ class MainWindow(QMainWindow):
         self._build_tab_orders()
         self._build_tab_products()
         self._build_tab_prediksi()
-
-        self.setStyleSheet("""
-            QLabel { font-size: 12px; }
-            QToolButton { padding: 4px 8px; }
-            QPushButton#btnPrimary { background:#2563eb; color:white; padding:6px 12px; border-radius:6px; }
-            QPushButton#btnPrimary:hover { background:#1e40af; }
-            QPushButton#btnSecondary { background:#e5e7eb; padding:6px 12px; border-radius:6px; }
-            QLineEdit#inputField { padding:6px; }
-        """)
 
     def _make_banner(self):
         b = QFrame(); b.setObjectName("banner")
@@ -393,7 +384,7 @@ class MainWindow(QMainWindow):
         self.btn_edit = QPushButton("Edit"); self.btn_edit.setEnabled(False); self.btn_edit.clicked.connect(self._edit_order)
         self.btn_edit.setObjectName("btnSecondary"); right.addWidget(self.btn_edit)
         self.btn_del = QPushButton("Hapus"); self.btn_del.setEnabled(False); self.btn_del.clicked.connect(self._hapus_order)
-        self.btn_del.setObjectName("btnSecondary"); right.addWidget(self.btn_del)
+        self.btn_del.setObjectName("btnDanger"); right.addWidget(self.btn_del)
 
         top.addLayout(right)
 
