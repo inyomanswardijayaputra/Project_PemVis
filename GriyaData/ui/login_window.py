@@ -16,7 +16,6 @@ class LoginWindow(QMainWindow):
         self.setWindowTitle("GriyaData - Login System")
         self.API_URL = "https://griyadata-backend-production.up.railway.app/api/login"
 
-        # Set font aplikasi/window eksplisit agar tidak mewarisi font tanpa ukuran
         try:
             self.setFont(QFont("Segoe UI", 10))
         except Exception:
@@ -43,9 +42,8 @@ class LoginWindow(QMainWindow):
                 border-radius: 16px;
             }
         """)
-        card.setFixedWidth(480)
+        card.setFixedWidth(400)
 
-        # Pastikan card juga punya font eksplisit
         card.setFont(QFont("Segoe UI", 10))
 
         card_layout = QVBoxLayout(card)
@@ -56,7 +54,7 @@ class LoginWindow(QMainWindow):
         header.setObjectName("headerLabel")
         header.setAlignment(Qt.AlignCenter)
         header.setFixedHeight(90)
-        # set font eksplisit untuk header (besar)
+        
         header.setFont(QFont("Arial", 30, QFont.Bold))
         header.setStyleSheet("""
             QLabel {
@@ -89,7 +87,6 @@ class LoginWindow(QMainWindow):
         """)
         card_layout.addWidget(subtitle_label)
 
-        # Form area
         form_widget = QWidget()
         form_widget.setObjectName("formWidget")
         form_widget.setStyleSheet("background-color: white;")
@@ -98,7 +95,6 @@ class LoginWindow(QMainWindow):
         form_layout.setContentsMargins(36, 20, 36, 0)
         form_layout.setSpacing(6)
 
-        # Username
         username_label = QLabel("Username:")
         username_label.setObjectName("usernameLabel")
         username_label.setFont(QFont("Arial", 11))
@@ -246,11 +242,3 @@ class LoginWindow(QMainWindow):
                 pass
         self._dashboard.show()
         self.close()
-
-
-# Jangan buat QApplication di import time; hanya untuk debug lokal
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    win = LoginWindow()
-    win.show()
-    sys.exit(app.exec())

@@ -15,7 +15,6 @@ from PySide6.QtCore import Qt, QThread, Signal
 from core.api_handler import APIHandler, ProductRecord
 
 
-# Auto-detect mapping
 AUTO_MAP = {
     "sales_date": "sales_date", "order_date": "sales_date",
     "tanggal": "sales_date", "date": "sales_date",
@@ -76,8 +75,6 @@ STATUS_NORM = {
     "cancelled": "Dibatalkan", "canceled": "Dibatalkan", "dibatalkan": "Dibatalkan",
 }
 
-
-# Background insert worker
 class InsertWorker(QThread):
     progress = Signal(int)
     finished = Signal(dict)
@@ -106,8 +103,6 @@ class InsertWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
-
-# Dialog
 class DialogImport(QDialog):
     def __init__(self, parent=None, api: APIHandler = None):
         super().__init__(parent)
@@ -213,7 +208,6 @@ class DialogImport(QDialog):
         self.btn_imp.clicked.connect(self._start_import); f.addWidget(self.btn_imp)
         root.addWidget(footer)
 
-    # File
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Pilih File", os.path.expanduser("~"),
@@ -233,7 +227,6 @@ class DialogImport(QDialog):
         self._refresh_preview()
         self.btn_imp.setEnabled(True)
 
-    # Mapping
     def _auto_detect(self, field, columns):
         for col in columns:
             if AUTO_MAP.get(col.lower().strip().replace(" ","_")) == field:
@@ -280,7 +273,6 @@ class DialogImport(QDialog):
 
         self.frame_map.setVisible(True)
 
-    # Preview 
     def _refresh_preview(self):
         if self._df is None: return
         df = self._df.head(20)
@@ -296,7 +288,6 @@ class DialogImport(QDialog):
         self.lbl_info.setText(
             f"  {len(self._df):,} baris  •  preview 20 baris  •  {len(self._df.columns)} kolom")
 
-    # Import
     def _start_import(self):
         if self._df is None: return
         mapping = {f: self._col_combos[f].currentText() for f in self._col_combos}
@@ -336,7 +327,6 @@ class DialogImport(QDialog):
                 qty   = int(float(qty_raw))
                 tsale = float(str(ts_raw).replace(",","").replace(" ",""))
 
-                # cek / buat produk
                 key = pname.lower()
                 pid = product_map.get(key)
                 if pid is None:

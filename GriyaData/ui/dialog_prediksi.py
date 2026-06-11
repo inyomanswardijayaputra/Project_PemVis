@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QFont, QColor
 
-# ML engine
 from ml.predictor import (
     predict_total_penjualan,
     predict_per_produk,
@@ -24,14 +23,12 @@ from ml.predictor import (
     HasilPrediksi,
 )
 
-# Formatter 
 try:
     from utils import Formatter
     _fmt_currency = Formatter.currency
 except Exception:
     def _fmt_currency(v): return f"Rp {v:,.0f}"
-
-# Background worker thread
+    
 class PrediksiWorker(QThread):
     finished = Signal(object) 
     error    = Signal(str)
@@ -52,8 +49,6 @@ class PrediksiWorker(QThread):
             self.finished.emit(hasil)
         except Exception as e:
             self.error.emit(str(e))
-
-# Chart Canvas
 class PrediksiCanvas(FigureCanvas):
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(9, 4), facecolor="#f8fafc")
@@ -160,8 +155,6 @@ class PrediksiCanvas(FigureCanvas):
 
         self.fig.tight_layout()
         self.draw()
-
-# Main Dialog
 class DialogPrediksi(QDialog):
     def __init__(self, parent=None, orders: list = None):
         super().__init__(parent)

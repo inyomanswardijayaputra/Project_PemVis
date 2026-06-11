@@ -13,8 +13,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QColor
 
-
-# Worker
 class PredictWorker(QThread):
     finished = Signal(object)
     error    = Signal(str)
@@ -37,9 +35,6 @@ class PredictWorker(QThread):
             self.finished.emit(report)
         except Exception as e:
             self.error.emit(str(e))
-
-
-# Chart Canvas
 class ForecastCanvas(FigureCanvas):
     def __init__(self):
         self.fig = Figure(facecolor="#ffffff")
@@ -102,9 +97,7 @@ class ForecastCanvas(FigureCanvas):
         ax.spines[["top", "right"]].set_visible(False)
         self.fig.tight_layout(pad=1.5)
         self.draw()
-
-
-# Metric Card
+        
 def _metric_card(title, value, sub, color):
     card = QFrame()
     card.setStyleSheet(f"""
@@ -127,9 +120,6 @@ def _metric_card(title, value, sub, color):
     ls.setStyleSheet("font-size:10px;color:#9ca3af;")
     lay.addWidget(lv); lay.addWidget(lt); lay.addWidget(ls)
     return card
-
-
-# Tab Utama
 class TabPrediksi(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -152,7 +142,6 @@ class TabPrediksi(QWidget):
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(12)
 
-        # Header
         hdr = QFrame()
         hdr.setStyleSheet("""QFrame{
             background:qlineargradient(x1:0,y1:0,x2:1,y2:0,
@@ -173,7 +162,6 @@ class TabPrediksi(QWidget):
         hl.addWidget(badge)
         root.addWidget(hdr)
 
-        # Kontrol
         cl = QHBoxLayout(); cl.setContentsMargins(4, 0, 4, 0); cl.setSpacing(12)
 
         cl.addWidget(QLabel("Mode:"))
@@ -224,7 +212,6 @@ class TabPrediksi(QWidget):
         root.addWidget(self.metrics_wrap)
         self.metrics_wrap.setVisible(False) 
 
-        # Chart
         self.chart_wrap = QWidget()
         cw_lay = QVBoxLayout(self.chart_wrap)
         cw_lay.setContentsMargins(0, 0, 0, 0)
@@ -234,7 +221,6 @@ class TabPrediksi(QWidget):
         root.addWidget(self.chart_wrap)
         self.chart_wrap.setVisible(False) 
 
-        # Tabel
         self.tbl_wrap = QWidget()
         tw_lay = QVBoxLayout(self.tbl_wrap)
         tw_lay.setContentsMargins(0, 16, 0, 0); tw_lay.setSpacing(8)
@@ -275,7 +261,6 @@ class TabPrediksi(QWidget):
         scroll_area.setWidget(content_widget)
         main_layout.addWidget(scroll_area)
 
-        # Status bar
         sb = QFrame()
         sb.setFixedHeight(28)
         sb.setStyleSheet("background:#f1f5f9;border-radius:5px;")
@@ -290,7 +275,6 @@ class TabPrediksi(QWidget):
         
         main_layout.addWidget(sb)
 
-    # Data 
     def load_orders(self, orders: list):
         try:
             from ml.predictor import SalesPredictor
@@ -302,7 +286,6 @@ class TabPrediksi(QWidget):
         self.combo_produk.addItems(prods)
         self.lbl_status.setText(f"{len(orders)} pesanan dimuat. Model siap dilatih.")
 
-    # Slots 
     @Slot(int)
     def _on_mode_changed(self, idx):
         show = (idx == 1)
@@ -356,7 +339,6 @@ class TabPrediksi(QWidget):
         self.lbl_status.setText(f"{msg}")
         QMessageBox.critical(self, "Prediksi Gagal", msg)
 
-    #Updaters 
     def _update_metrics(self, m):
         def _s(card, val, sub=None):
             lbl = card.findChild(QLabel, "__mv")

@@ -1,7 +1,4 @@
-# chart_widget.py
 import matplotlib
-# Jangan paksa "Agg" jika menggunakan FigureCanvasQTAgg (Qt). Hapus atau gunakan "QtAgg" jika perlu.
-# matplotlib.use("QtAgg")  # opsional, biasanya tidak perlu jika environment sudah benar
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -16,14 +13,13 @@ from PySide6.QtGui import QFont
 
 from utils import CHART_TYPES
 
-# Pastikan rcParams memiliki ukuran font > 0
 matplotlib.rcParams.update({
     "font.size": 10,
     "axes.titlesize": 13,
     "axes.labelsize": 10,
     "xtick.labelsize": 9,
     "ytick.labelsize": 9,
-    "font.family": "DejaVu Sans",  # atau "Arial" jika tersedia
+    "font.family": "DejaVu Sans",  
 })
 
 PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
@@ -32,12 +28,10 @@ PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
 
 class ChartCanvas(FigureCanvas):
     def __init__(self, parent=None):
-        # buat Figure seperti biasa
         self.fig = Figure(figsize=(8, 4.5), facecolor="#ffffff")
         super().__init__(self.fig)
         self.setParent(parent)
 
-        # Set font Qt pada widget canvas agar Qt tidak mengeluh
         default_font = QFont("Arial", 10)
         self.setFont(default_font)
 
@@ -97,7 +91,6 @@ class ChartWidget(QWidget):
 
     def refresh(self):
         idx = self.combo_chart.currentIndex()
-        # clear figure and create a fresh axis
         self.canvas.fig.clear()
         ax = self.canvas.fig.add_subplot(111)
         ax.set_facecolor("#f9fafb")
@@ -118,14 +111,12 @@ class ChartWidget(QWidget):
                 ax.text(0.5, 0.5, "Belum ada data", ha="center", va="center",
                         transform=ax.transAxes, color="#9ca3af")
 
-        # try/except karena tight_layout kadang memicu warning pada beberapa backend
         try:
             self.canvas.fig.tight_layout(pad=2)
         except Exception:
             pass
         self.canvas.draw()
 
-    # --- Chart functions (sama seperti sebelumnya, pastikan fontsize > 0) ---
     def _draw_bar_kategori(self, ax):
         data = self._data.get("revenue_by_kategori", {})
         if not data:

@@ -41,7 +41,6 @@ class DialogOrder(QDialog):
         root.setSpacing(0)
         root.setContentsMargins(0, 0, 0, 0)
 
-        # Header
         hdr = QFrame(); hdr.setObjectName("dialogHeader")
         h = QVBoxLayout(hdr); h.setContentsMargins(24, 16, 24, 14); h.setSpacing(3)
         t = QLabel(mode); t.setObjectName("dialogTitle")
@@ -50,7 +49,6 @@ class DialogOrder(QDialog):
         h.addWidget(t); h.addWidget(s)
         root.addWidget(hdr)
 
-        # Scroll area
         scroll = QScrollArea(); scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         body = QWidget()
@@ -122,8 +120,7 @@ class DialogOrder(QDialog):
         self.inp_shipping.setRange(0, 999_999_999); self.inp_shipping.setDecimals(0)
         self.inp_shipping.setPrefix("Rp "); self.inp_shipping.setValue(0)
         form.addRow("Shipping Fee (Rp)", self.inp_shipping)
-
-        # Total & Total Sales 
+ 
         self.inp_total = QDoubleSpinBox(); self.inp_total.setObjectName("inputField")
         self.inp_total.setButtonSymbols(QDoubleSpinBox.PlusMinus) 
         self.inp_total.setRange(0, 999_999_999); self.inp_total.setDecimals(0)

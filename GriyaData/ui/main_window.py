@@ -19,9 +19,6 @@ from ui.tab_prediksi import TabPrediksi
 
 APP_TITLE = "GriyaData — Manajemen Penjualan"
 
-# -------------------------
-# Generic threaded filter worker
-# -------------------------
 class FilterWorker(QThread):
     finished = Signal(object)
     error = Signal(str)
@@ -51,7 +48,6 @@ class FilterWorker(QThread):
         kw = (p.get("keyword") or "").strip().lower()
         exact = bool(p.get("exact", False))
 
-        # numeric filter
         if col_type == "number" and val is not None and op != "All":
             filtered = []
             for o in out:
@@ -98,9 +94,6 @@ class FilterWorker(QThread):
             out = [x for x in out if kw in str(getattr(x, col_key, "") or "").lower()]
         return out
 
-# -------------------------
-# Background loader
-# -------------------------
 class DataLoader(QThread):
     finished = Signal(list)
     error    = Signal(str)
@@ -113,9 +106,6 @@ class DataLoader(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
-# -------------------------
-# DialogProduk (CRUD)
-# -------------------------
 class DialogProduk(QDialog):
     def __init__(self, parent=None, product: ProductRecord = None):
         super().__init__(parent)
@@ -174,10 +164,6 @@ class DialogProduk(QDialog):
             "category":     self.inp_cat.text().strip(),
             "price":        float(self.inp_price.text().replace(",","").strip() or 0),
         }
-
-# -------------------------
-# Main Window (threaded filtering integrated + numeric validation)
-# -------------------------
 class MainWindow(QMainWindow):
     def __init__(self, username="Admin"):
         super().__init__()
@@ -190,17 +176,13 @@ class MainWindow(QMainWindow):
         self._orders: list[OrderRecord] = []
         self._loader = None
 
-        # debounce timers
         self._prod_timer = QTimer(self); self._prod_timer.setSingleShot(True); self._prod_timer.setInterval(300)
         self._order_timer = QTimer(self); self._order_timer.setSingleShot(True); self._order_timer.setInterval(300)
 
-        # running workers keep references to avoid GC
         self._running_workers = []
 
-        # cache unique values per column to avoid recomputing on every click
         self._unique_cache: dict[str, list[str]] = {}
 
-        # columns that are considered enum-like for orders and products
         self._order_enum_columns = {
             "product_name",
             "status",
@@ -220,7 +202,6 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
         self.refresh_all()
 
-    # ---------------- Helpers: numeric validation ----------------
     def _mark_invalid(self, widget: QLineEdit, msg: str | None = None):
         widget.setStyleSheet("border: 1.5px solid #ef4444;")  # red
         if msg:
@@ -244,7 +225,6 @@ class MainWindow(QMainWindow):
             self._mark_invalid(widget, "Input angka tidak valid; abaikan filter numerik.")
             return None
 
-    # ---------------- Menu ----------------
     def _build_menu(self):
         mb = self.menuBar(); mb.setObjectName("menuBar")
         mf = mb.addMenu("&File")
@@ -265,7 +245,6 @@ class MainWindow(QMainWindow):
             a = QAction(label, self); a.setShortcut(shortcut)
             a.triggered.connect(slot); md.addAction(a)
 
-    # ---------------- UI layout ----------------
     def _build_ui(self):
         central = QWidget(); central.setObjectName("mainContainer")
         self.setCentralWidget(central)
@@ -279,7 +258,6 @@ class MainWindow(QMainWindow):
         self._build_tab_products()
         self._build_tab_prediksi()
 
-        # global stylesheet tweaks to avoid empty font-size in some widgets
         self.setStyleSheet("""
             QLabel { font-size: 12px; }
             QToolButton { padding: 4px 8px; }
@@ -339,7 +317,6 @@ class MainWindow(QMainWindow):
         lbl = card.findChild(QLabel, "cardVal")
         if lbl: lbl.setText(val)
 
-    # ---------------- Orders Tab (full columns + numeric validation) ----------------
     def _build_tab_orders(self):
         tab = QWidget(); tab.setObjectName("tabTable")
         root = QVBoxLayout(tab); root.setContentsMargins(16,14,16,14); root.setSpacing(8)
@@ -377,19 +354,17 @@ class MainWindow(QMainWindow):
         self.order_col_cb.currentIndexChanged.connect(self._on_order_col_changed)
         left.addWidget(QLabel("Kolom:")); left.addWidget(self.order_col_cb)
 
-        # value dropdown for text columns (NEW)
         self.order_value_cb = QComboBox()
         self.order_value_cb.setVisible(False)
         self.order_value_cb.setObjectName("inputField")
         self.order_value_cb.currentTextChanged.connect(lambda _: self._order_timer.start())
         left.addWidget(self.order_value_cb)
 
-        # numeric controls (hidden by default)
         self.order_num_op = QComboBox(); self.order_num_op.addItems(["All","<","=" ,">"])
         self.order_num_op.setMinimumWidth(80); self.order_num_op.currentTextChanged.connect(lambda _: self._order_timer.start())
         self.order_num_input = QLineEdit(); self.order_num_input.setPlaceholderText("Angka")
         self.order_num_input.setObjectName("inputField")
-        # connect validation + debounce
+
         self.order_num_input.textChanged.connect(lambda _: (self._validate_and_parse_number(self.order_num_input), self._order_timer.start()))
         left.addWidget(self.order_num_op); left.addWidget(self.order_num_input)
 
@@ -397,7 +372,6 @@ class MainWindow(QMainWindow):
 
         top.addItem(QSpacerItem(20, 10, QSP.Expanding, QSP.Minimum))
 
-        # Right: text search + help + actions
         right = QHBoxLayout(); right.setSpacing(8)
         self.order_text_search = QLineEdit(); self.order_text_search.setPlaceholderText("Kata kunci (untuk kolom teks)")
         self.order_text_search.setObjectName("inputField")
@@ -405,7 +379,6 @@ class MainWindow(QMainWindow):
         self._order_timer.timeout.connect(self._start_order_worker)
         right.addWidget(self.order_text_search)
 
-        # help/info button
         btn_help = QToolButton(); btn_help.setText("?"); btn_help.setToolTip("Petunjuk penggunaan filter dan kata kunci")
         btn_help.clicked.connect(lambda: self._show_help("orders"))
         right.addWidget(btn_help)
@@ -417,7 +390,6 @@ class MainWindow(QMainWindow):
         btn_add = QPushButton("Tambah Data Pesanan"); btn_add.setObjectName("btnPrimary"); btn_add.clicked.connect(self._tambah_order)
         right.addWidget(btn_add)
 
-        # Edit / Delete buttons for orders
         self.btn_edit = QPushButton("Edit"); self.btn_edit.setEnabled(False); self.btn_edit.clicked.connect(self._edit_order)
         self.btn_edit.setObjectName("btnSecondary"); right.addWidget(self.btn_edit)
         self.btn_del = QPushButton("Hapus"); self.btn_del.setEnabled(False); self.btn_del.clicked.connect(self._hapus_order)
@@ -457,30 +429,23 @@ class MainWindow(QMainWindow):
         self.table.doubleClicked.connect(self._edit_order)
         root.addWidget(self.table)
         self.tabs.addTab(tab, "Data Pesanan")
-
-        # init visibility
+        
         self._on_order_col_changed(0)
 
-    # Ganti fungsi _on_header_clicked (Orders)
     def _on_header_clicked(self, logicalIndex: int):
         if logicalIndex < 0 or logicalIndex >= len(self._order_filter_cols):
             return
 
-        # set ComboBox Kolom sesuai header yang diklik tanpa memicu signal change handler
         try:
             self.order_col_cb.blockSignals(True)
             self.order_col_cb.setCurrentIndex(logicalIndex)
         finally:
             self.order_col_cb.blockSignals(False)
 
-        # panggil handler yang sudah ada untuk memperbarui visibility input (text/number/value dropdown)
-        # _on_order_col_changed akan memicu rebuild value dropdown dan start timer
         self._on_order_col_changed(logicalIndex)
 
-        # lanjutkan menampilkan menu enum (sebelumnya ada di fungsi lama)
         label, col_key, col_type = self._order_filter_cols[logicalIndex]
 
-        # hanya tampilkan menu enum untuk kolom yang memang enum-like
         if col_key not in self._order_enum_columns:
             return
 
@@ -524,8 +489,6 @@ class MainWindow(QMainWindow):
                 self.order_text_search.setText(text)
             self._order_timer.start()
 
-
-
     def _on_order_col_changed(self, idx):
         data = self.order_col_cb.itemData(idx)
         if not data:
@@ -537,7 +500,6 @@ class MainWindow(QMainWindow):
         self.order_num_input.setVisible(is_number)
         self.order_text_search.setVisible(not is_number)
 
-        # show value dropdown for text columns (populate only if column is text)
         if typ == "text":
             col_key, _ = self.order_col_cb.itemData(idx)
             vals = self._unique_cache.get(col_key)
@@ -604,14 +566,12 @@ class MainWindow(QMainWindow):
         self._fill_order_table(filtered)
         self.lbl_status.setText(f"{len(filtered)} pesanan ditampilkan.")
 
-    # ---------------- Products Tab (with numeric validation + header enum filter) ----------------
     def _build_tab_products(self):
         tab = QWidget(); tab.setObjectName("tabProduk")
         root = QVBoxLayout(tab); root.setContentsMargins(16,14,16,14); root.setSpacing(8)
 
         top = QHBoxLayout(); top.setSpacing(8)
 
-        # Column selector
         self.prod_col_cb = QComboBox()
         PROD_FILTER_COLS = [
             ("Product Name", "product_name", "text"),
@@ -623,22 +583,19 @@ class MainWindow(QMainWindow):
         self.prod_col_cb.currentIndexChanged.connect(self._on_prod_col_changed)
         top.addWidget(QLabel("Kolom:")); top.addWidget(self.prod_col_cb)
 
-        # category dropdown
         self.prod_cat_cb = QComboBox(); self.prod_cat_cb.addItem("All"); self.prod_cat_cb.currentTextChanged.connect(lambda _: self._prod_timer.start())
         top.addWidget(self.prod_cat_cb)
 
-        # numeric controls
         self.prod_num_op = QComboBox(); self.prod_num_op.addItems(["All","<","=" ,">"])
         self.prod_num_op.setMinimumWidth(80); self.prod_num_op.currentTextChanged.connect(lambda _: self._prod_timer.start())
         self.prod_num_input = QLineEdit(); self.prod_num_input.setPlaceholderText("Angka")
         self.prod_num_input.setObjectName("inputField")
-        # connect validation + debounce
+
         self.prod_num_input.textChanged.connect(lambda _: (self._validate_and_parse_number(self.prod_num_input), self._prod_timer.start()))
         top.addWidget(self.prod_num_op); top.addWidget(self.prod_num_input)
 
         top.addItem(QSpacerItem(20, 10, QSP.Expanding, QSP.Minimum))
 
-        # text search + help
         self.prod_text_search = QLineEdit(); self.prod_text_search.setPlaceholderText("Kata kunci (teks)")
         self.prod_text_search.setObjectName("inputField")
         self.prod_text_search.textChanged.connect(lambda _: self._prod_timer.start())
@@ -655,7 +612,6 @@ class MainWindow(QMainWindow):
         btn_add = QPushButton("Tambah Produk"); btn_add.setObjectName("btnPrimary"); btn_add.clicked.connect(self._tambah_produk)
         top.addWidget(btn_add)
 
-        # Edit / Delete buttons for products
         self.btn_edit_prod = QPushButton("Edit"); self.btn_edit_prod.setEnabled(False); self.btn_edit_prod.clicked.connect(self._edit_produk)
         self.btn_edit_prod.setObjectName("btnSecondary"); top.addWidget(self.btn_edit_prod)
         self.btn_del_prod = QPushButton("Hapus"); self.btn_del_prod.setEnabled(False); self.btn_del_prod.clicked.connect(self._hapus_produk)
@@ -663,7 +619,6 @@ class MainWindow(QMainWindow):
 
         root.addLayout(top)
 
-        # product table
         self.tbl_prod = QTableWidget(); self.tbl_prod.setObjectName("dataTable")
         pcols = ["ID", "Product Name", "Category", "Price"]
         self.tbl_prod.setColumnCount(len(pcols))
@@ -672,7 +627,7 @@ class MainWindow(QMainWindow):
         hdr.setSectionResizeMode(QHeaderView.Stretch)
         hdr.setSectionResizeMode(0, QHeaderView.Fixed)
         self.tbl_prod.setColumnWidth(0, 50)
-        # connect header click for product enum columns (category)
+   
         hdr.sectionClicked.connect(self._on_prod_header_clicked)
         self.tbl_prod.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_prod.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -684,13 +639,9 @@ class MainWindow(QMainWindow):
         root.addWidget(self.tbl_prod)
         self.tabs.addTab(tab, "Produk")
 
-        # init visibility
         self._on_prod_col_changed(0)
 
-    # Ganti/isi fungsi _on_prod_header_clicked (Products)
     def _on_prod_header_clicked(self, logicalIndex: int):
-        # Map header index ke index ComboBox prod_col_cb
-        # table columns: 0: ID, 1: Product Name, 2: Category, 3: Price
         header_to_combo = {1: 0, 2: 1, 3: 2}
         if logicalIndex not in header_to_combo:
             return
@@ -702,10 +653,8 @@ class MainWindow(QMainWindow):
         finally:
             self.prod_col_cb.blockSignals(False)
 
-        # panggil handler yang sudah ada untuk memperbarui visibility input (text/number/category dropdown)
         self._on_prod_col_changed(combo_idx)
 
-        # jika kolom Category diklik, tampilkan menu enum seperti di orders
         if logicalIndex != 2:
             return
 
@@ -807,12 +756,10 @@ class MainWindow(QMainWindow):
                 self.tbl_prod.setItem(r, c, item)
         self.lbl_status.setText(f"{len(filtered)} produk ditampilkan.")
 
-    # ---------------- Prediksi Tab ----------------
     def _build_tab_prediksi(self):
         self._tab_prediksi = TabPrediksi()
         self.tabs.addTab(self._tab_prediksi, "Prediksi ML")
 
-    # ---------------- Statusbar ----------------
     def _build_statusbar(self):
         sb = self.statusBar(); sb.setObjectName("statusBar")
         sb.setSizeGripEnabled(False)
@@ -820,10 +767,9 @@ class MainWindow(QMainWindow):
         self.lbl_status = QLabel("  Memuat data...")
         sb.addWidget(self.lbl_status)
 
-    # ---------------- Loaders and table fill ----------------
     def refresh_all(self):
         self.lbl_status.setText("Mengambil data dari API...")
-        # loader in background
+        
         self._loader = DataLoader(self.api)
         self._loader.finished.connect(self._on_data_loaded_with_cleanup)
         self._loader.error.connect(self._on_data_error)
@@ -844,9 +790,7 @@ class MainWindow(QMainWindow):
     @Slot(list)
     def _on_data_loaded(self, orders):
         self._orders = orders
-        # clear unique cache because data changed
         self._unique_cache.clear()
-        # start worker to apply current filters
         self._start_order_worker()
         stats = self.api.summary_stats(orders)
         self._set_card(self._card_tx,    Formatter.number(stats["total_tx"]))
@@ -920,7 +864,6 @@ class MainWindow(QMainWindow):
         self.prod_cat_cb.blockSignals(False)
         self._start_prod_worker()
 
-    # ---------------- CRUD helpers (use existing implementations) ----------------
     def _on_prod_sel_changed(self):
         has = bool(self.tbl_prod.selectedItems())
         try:
@@ -1048,11 +991,9 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-    # ---------------- Worker error handler ----------------
     def _on_worker_error(self, msg):
         self.lbl_status.setText(f"Filter error: {msg}")
 
-    # ---------------- Help / Info ----------------
     def _show_help(self, tab: str):
         if tab == "orders":
             text = (
@@ -1078,12 +1019,3 @@ class MainWindow(QMainWindow):
                 "- Tombol Refresh memuat ulang daftar produk dari API."
             )
         QMessageBox.information(self, "Petunjuk Filter & Pencarian", text)
-
-# If run as script (for quick testing)
-if __name__ == "__main__":
-    import sys
-    app = QApplication(sys.argv)
-    app.setFont(QFont("Segoe UI", 10))
-    w = MainWindow("Admin")
-    w.show()
-    sys.exit(app.exec())
