@@ -2,34 +2,34 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 
-# Auth
 class LoginRequest(BaseModel):
     username: str
     password: str
 
 
-# Products
 class ProductCreate(BaseModel):
     product_name: str
     category:     str
     price:        float
+    user_id:      Optional[int] = None
 
 class ProductUpdate(BaseModel):
     product_name: Optional[str]   = None
     category:     Optional[str]   = None
     price:        Optional[float] = None
+    user_id:      Optional[int]   = None
 
 
-# Orders 
 class OrderCreate(BaseModel):
     order_id:               Optional[str]   = None
     customer_name:          str
     product_id:             int
+    user_id:                Optional[int]   = None
     quantity:               int
     discount:               Optional[float] = 0
     total:                  float
     shipping_fee:           Optional[float] = 0
-    total_sales:            Optional[float] = None   
+    total_sales:            Optional[float] = None
     status:                 Optional[str]   = "Pending"
     shipping_address:       Optional[str]   = ""
     customer_gender:        Optional[str]   = ""
@@ -39,12 +39,11 @@ class OrderCreate(BaseModel):
     estimated_delivery_days:Optional[int]   = 0
     sales_channel:          Optional[str]   = ""
     customer_rating:        Optional[float] = 0
-    sales_date:             Optional[str]   = None   
+    sales_date:             Optional[str]   = None
 
 class OrderUpdate(BaseModel):
     status: str
 
 
-# Bulk Orders
 class BulkOrderCreate(BaseModel):
     orders: List[OrderCreate]

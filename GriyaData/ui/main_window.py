@@ -10,12 +10,26 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot, QThread, Signal, QTimer, QPoint
 from PySide6.QtGui import QAction, QColor, QFont
 
+import csv
+from datetime import datetime
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from PySide6.QtWidgets import QFileDialog
+
 from core.api_handler import APIHandler, OrderRecord, ProductRecord
 from utils import Formatter
 from ui.chart_widget import ChartWidget
 from ui.dialog_order import DialogOrder
 from ui.dialog_import import DialogImport
 from ui.tab_prediksi import TabPrediksi
+
+ANGGOTA = [
+    ("I Nyoman Swardi Jaya Putra",  "F1D02310057"),
+    ("Ahmad Ridho Fakhrezi",    "F1D021025"),
+    ("Irfan Jayadi",   "F1D02310011"),
+]
+_ANGGOTA_STR = "  |  ".join(f"{n} ({nim})" for n, nim in ANGGOTA)
 
 APP_TITLE = "GriyaData — Manajemen Penjualan"
 
@@ -165,14 +179,16 @@ class DialogProduk(QDialog):
             "price":        float(self.inp_price.text().replace(",","").strip() or 0),
         }
 class MainWindow(QMainWindow):
-    def __init__(self, username="Admin"):
+    def __init__(self, username="Admin", user_id=None):
         super().__init__()
         self.username = username
+        self.user_id  = user_id
         self.setWindowTitle(APP_TITLE)
         self.setMinimumSize(1280, 760)
         self.showMaximized()
 
         self.api = APIHandler()
+        self.api.current_user_id = user_id
         self._orders: list[OrderRecord] = []
         self._loader = None
 
@@ -227,23 +243,45 @@ class MainWindow(QMainWindow):
 
     def _build_menu(self):
         mb = self.menuBar(); mb.setObjectName("menuBar")
+
+        # ── File
         mf = mb.addMenu("&File")
-        for label, shortcut, slot in [
-            ("Refresh Data", "F5", self.refresh_all),
-            ("Logout", "Ctrl+L", self._logout),
-            ("Keluar", "Ctrl+Q", self.close),
-        ]:
-            a = QAction(label, self); a.setShortcut(shortcut)
-            a.triggered.connect(slot); mf.addAction(a)
+        r_data = QAction("Refresh Data", self)
+        r_data.setShortcut("F5")
+        r_data.triggered.connect(self.refresh_all)
+        mf.addAction(r_data)
+
+        # ── Pesanan
         md = mb.addMenu("&Pesanan")
         for label, shortcut, slot in [
             ("Tambah Data Pesanan", "Ctrl+N", self._tambah_order),
-            ("Edit Pesanan", "Ctrl+E", self._edit_order),
-            ("Hapus Pesanan", "Delete", self._hapus_order),
-            ("Import CSV/Excel", "Ctrl+I", self._import_file),
+            ("Edit Pesanan",        "Ctrl+E", self._edit_order),
+            ("Hapus Pesanan",       "Delete", self._hapus_order),
+            ("Import CSV/Excel",    "Ctrl+I", self._import_file),
+            ("Export CSV",          "Ctrl+Shift+C", self._export_csv),
+            ("Export Excel",        "Ctrl+Shift+E", self._export_excel),
         ]:
             a = QAction(label, self); a.setShortcut(shortcut)
             a.triggered.connect(slot); md.addAction(a)
+        md.addSeparator()
+
+        # ── Help 
+        mh = mb.addMenu("&Help")
+        a_about = QAction("Tentang GriyaData", self)
+        a_about.triggered.connect(self._show_about)
+        a_filter = QAction("Petunjuk Filter & Pencarian", self)
+        a_filter.triggered.connect(lambda: self._show_help("orders"))
+        mh.addAction(a_about)
+        mh.addAction(a_filter)
+        
+        # ── Exit
+        me = mb.addMenu("&Exit")
+        for label, shortcut, slot in [
+            ("Logout",         "Ctrl+L", self._logout),
+            ("Keluar",         "Ctrl+Q", self.close),
+        ]:
+            a = QAction(label, self); a.setShortcut(shortcut)
+            a.triggered.connect(slot); me.addAction(a)
 
     def _build_ui(self):
         central = QWidget(); central.setObjectName("mainContainer")
@@ -314,7 +352,6 @@ class MainWindow(QMainWindow):
 
         top = QHBoxLayout(); top.setSpacing(8)
 
-        # Column selector (left)
         left = QHBoxLayout(); left.setSpacing(6)
         self.order_col_cb = QComboBox()
         self._order_filter_cols = [
@@ -374,10 +411,6 @@ class MainWindow(QMainWindow):
         btn_help.clicked.connect(lambda: self._show_help("orders"))
         right.addWidget(btn_help)
 
-        btn_ref = QPushButton("Refresh"); btn_ref.clicked.connect(self.refresh_all)
-        btn_ref.setObjectName("btnSecondary")
-        right.addWidget(btn_ref)
-
         btn_add = QPushButton("Tambah Data Pesanan"); btn_add.setObjectName("btnPrimary"); btn_add.clicked.connect(self._tambah_order)
         right.addWidget(btn_add)
 
@@ -385,6 +418,14 @@ class MainWindow(QMainWindow):
         self.btn_edit.setObjectName("btnSecondary"); right.addWidget(self.btn_edit)
         self.btn_del = QPushButton("Hapus"); self.btn_del.setEnabled(False); self.btn_del.clicked.connect(self._hapus_order)
         self.btn_del.setObjectName("btnDanger"); right.addWidget(self.btn_del)
+
+        btn_export = QPushButton("Export")
+        btn_export.setObjectName("btnSecondary")
+        exp_menu = QMenu(self)
+        exp_menu.addAction("Export CSV", self._export_csv)
+        exp_menu.addAction("Export Excel", self._export_excel)
+        btn_export.setMenu(exp_menu)
+        right.addWidget(btn_export)
 
         top.addLayout(right)
 
@@ -597,9 +638,6 @@ class MainWindow(QMainWindow):
         btn_help_p.clicked.connect(lambda: self._show_help("products"))
         top.addWidget(btn_help_p)
 
-        btn_ref = QPushButton("Refresh"); btn_ref.clicked.connect(self._load_products)
-        btn_ref.setObjectName("btnSecondary")
-        top.addWidget(btn_ref)
         btn_add = QPushButton("Tambah Produk"); btn_add.setObjectName("btnPrimary"); btn_add.clicked.connect(self._tambah_produk)
         top.addWidget(btn_add)
 
@@ -757,6 +795,10 @@ class MainWindow(QMainWindow):
         sb.setStyleSheet("QStatusBar::item { border: none; }")
         self.lbl_status = QLabel("  Memuat data...")
         sb.addWidget(self.lbl_status)
+        lbl_anggota = QLabel(f"  👥  {_ANGGOTA_STR}  ")
+        lbl_anggota.setStyleSheet("color:#6b7280;font-size:10px;")
+        lbl_anggota.setToolTip("Nama & NIM anggota kelompok (tidak dapat diedit)")
+        sb.addPermanentWidget(lbl_anggota)
 
     def refresh_all(self):
         self.lbl_status.setText("Mengambil data dari API...")
@@ -972,6 +1014,120 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
             self.lbl_status.setText("Import selesai.")
+
+    # ─── Export CSV dan EXCEL
+
+    def _get_visible_orders(self) -> list:
+        visible_ids = set()
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item:
+                try:
+                    visible_ids.add(int(item.text()))
+                except ValueError:
+                    pass
+        return [o for o in self._orders if o.id in visible_ids]
+
+    def _export_headers(self):
+        return [
+            "ID DB", "Order ID", "Customer Name", "Product Name", "Category",
+            "Price", "Quantity", "Discount", "Total", "Shipping Fee", "Total Sales",
+            "Status", "Shipping Address", "Gender", "City", "Payment Method",
+            "Courier", "Est. Delivery Days", "Sales Channel", "Rating", "Sales Date",
+        ]
+
+    def _order_to_row(self, o):
+        return [
+            o.id, o.order_id, o.customer_name, o.product_name, o.category,
+            o.price, o.quantity, o.discount, o.total, o.shipping_fee, o.total_sales,
+            o.status, o.shipping_address, o.customer_gender, o.customer_city,
+            o.payment_method, o.courier, o.estimated_delivery_days,
+            o.sales_channel, o.customer_rating, o.sales_date,
+        ]
+
+    def _export_csv(self):
+        orders = self._get_visible_orders()
+        if not orders:
+            QMessageBox.warning(self, "Tidak Ada Data", "Tidak ada data yang bisa diekspor."); return
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Simpan sebagai CSV",
+            f"GriyaData_Export_{ts}.csv",
+            "CSV Files (*.csv)")
+        if not path: return
+
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                writer.writerow(self._export_headers())
+                for o in orders:
+                    writer.writerow(self._order_to_row(o))
+            self.lbl_status.setText(f"  CSV berhasil disimpan — {len(orders)} baris → {path}")
+            QMessageBox.information(self, "Export Berhasil",
+                                    f"{len(orders)} baris diekspor ke:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Gagal", str(e))
+
+    def _export_excel(self):
+        orders = self._get_visible_orders()
+        if not orders:
+            QMessageBox.warning(self, "Tidak Ada Data", "Tidak ada data yang bisa diekspor."); return
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Simpan sebagai Excel",
+            f"GriyaData_Export_{ts}.xlsx",
+            "Excel Files (*.xlsx)")
+        if not path: return
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Data Pesanan"
+
+            # Header styling
+            hdr_fill = PatternFill("solid", fgColor="1E3A5F")
+            hdr_font = XLFont(bold=True, color="FFFFFF", size=11)
+            headers  = self._export_headers()
+            for col, h in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=h)
+                cell.fill = hdr_fill
+                cell.font = hdr_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            ws.row_dimensions[1].height = 22
+
+            # Data rows — zebra striping
+            fill_even = PatternFill("solid", fgColor="F0F9FF")
+            for row_i, o in enumerate(orders, 2):
+                for col, val in enumerate(self._order_to_row(o), 1):
+                    cell = ws.cell(row=row_i, column=col, value=val)
+                    cell.alignment = Alignment(horizontal="center")
+                    if row_i % 2 == 0:
+                        cell.fill = fill_even
+
+            # Auto-width
+            for col in ws.columns:
+                max_len = max((len(str(c.value or "")) for c in col), default=8)
+                ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+
+            wb.save(path)
+            self.lbl_status.setText(f"  Excel berhasil disimpan — {len(orders)} baris → {path}")
+            QMessageBox.information(self, "Export Berhasil",
+                                    f"{len(orders)} baris diekspor ke:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Gagal", str(e))
+
+    def _show_about(self):
+        anggota_lines = "\n".join(f"  • {n}  —  NIM {nim}" for n, nim in ANGGOTA)
+        QMessageBox.information(
+            self, "Tentang GriyaData",
+            f"GriyaData — Aplikasi Manajemen Penjualan Furniture\n\n"
+            f"Versi  : 2.0\n"
+            f"Backend: Railway (FastAPI + Supabase PostgreSQL)\n"
+            f"ML     : Random Forest Regressor (scikit-learn)\n\n"
+            f"Anggota Kelompok:\n{anggota_lines}"
+        )
 
     def _logout(self):
         if QMessageBox.question(self, "Logout", "Yakin ingin keluar?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:

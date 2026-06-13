@@ -18,8 +18,6 @@ app = FastAPI(title="API GriyaData",
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-
-# ROOT
 @app.get("/")
 def read_root():
     return {"message": "API GriyaData berhasil terhubung ke Database Supabase."}
@@ -32,14 +30,16 @@ def login_admin(request: schemas.LoginRequest, db: Session = Depends(get_db)):
         models.User.username == request.username).first()
     if user and user.password == request.password:
         return {"status": "success", "message": "Login berhasil",
-                "token": "token_rahasia_griyadata_123"}
+                "token": "token_rahasia_griyadata_123",
+                "user_id": user.id, "username": user.username}
     raise HTTPException(status_code=400, detail="Username atau password salah")
 
 
 # PRODUCTS
 def _product_dict(p) -> dict:
     return {"id": p.id, "product_name": p.product_name,
-            "category": p.category, "price": p.price}
+            "category": p.category, "price": p.price,
+            "user_id": p.user_id}
 
 
 @app.get("/api/products")
@@ -55,7 +55,8 @@ def create_product(data: schemas.ProductCreate, db: Session = Depends(get_db)):
     if existing:
         return {"message": "Produk sudah ada.", "data": _product_dict(existing)}
     p = models.Product(product_name=data.product_name,
-                       category=data.category, price=data.price)
+                       category=data.category, price=data.price,
+                       user_id=data.user_id)
     db.add(p); db.commit(); db.refresh(p)
     return {"message": "Produk berhasil ditambahkan!", "data": _product_dict(p)}
 
@@ -69,6 +70,7 @@ def update_product(product_id: int, data: schemas.ProductUpdate,
     if data.product_name is not None: p.product_name = data.product_name
     if data.category     is not None: p.category     = data.category
     if data.price        is not None: p.price        = data.price
+    if data.user_id      is not None: p.user_id      = data.user_id
     db.commit(); db.refresh(p)
     return {"message": f"Produk ID {product_id} diperbarui.", "data": _product_dict(p)}
 
@@ -82,7 +84,6 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     return {"message": f"Produk ID {product_id} berhasil dihapus."}
 
 
-# ORDERS
 def _parse_date(s) -> datetime | None:
     if not s:
         return None
@@ -206,7 +207,6 @@ def bulk_insert_orders(payload: schemas.BulkOrderCreate,
     return {"message": f"Bulk insert selesai. {inserted} berhasil, {skipped} dilewati.",
             "inserted": inserted, "skipped": skipped, "errors": errors[:10]}
 
-# FILE UPLOAD
 @app.post("/api/upload")
 def upload_file(file: UploadFile = File(...)):
     loc = f"uploads/{file.filename}"

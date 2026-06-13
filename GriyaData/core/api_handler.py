@@ -57,8 +57,17 @@ class APIHandler:
     def __init__(self, base_url: str = API_BASE):
         self.base = base_url.rstrip("/")
         self._products_cache: list[ProductRecord] = []
+        self.current_user_id: int | None = None   # diset saat login
 
-    # Products
+    def login(self, username: str, password: str) -> dict:
+        import requests as _r
+        r = _r.post(f"{self.base}/api/login",
+                    json={"username": username, "password": password}, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        self.current_user_id = data.get("user_id")
+        return data
+
     def get_products(self) -> list[ProductRecord]:
         try:
             r = requests.get(f"{self.base}/api/products", timeout=10)
@@ -77,7 +86,8 @@ class APIHandler:
         return self._products_cache
 
     def create_product(self, data: dict) -> dict:
-        """data: {product_name, category, price}"""
+        if self.current_user_id and "user_id" not in data:
+            data = {**data, "user_id": self.current_user_id}
         r = requests.post(f"{self.base}/api/products", json=data, timeout=10)
         r.raise_for_status()
         self._products_cache = []   
@@ -95,7 +105,6 @@ class APIHandler:
         self._products_cache = []
         return r.json()
 
-    # Orders
     def get_all_orders(self, status: str = "All",
                        channel: str = "All") -> list[OrderRecord]:
         try:
@@ -143,6 +152,8 @@ class APIHandler:
         return orders
 
     def create_order(self, data: dict) -> dict:
+        if self.current_user_id and "user_id" not in data:
+            data = {**data, "user_id": self.current_user_id}
         r = requests.post(f"{self.base}/api/orders", json=data, timeout=10)
         r.raise_for_status()
         return r.json()
@@ -154,7 +165,6 @@ class APIHandler:
         return r.json()
 
     def update_order(self, order_id: int, data: dict) -> dict:
-        """PUT /api/orders/{id} — update semua field order."""
         r = requests.put(f"{self.base}/api/orders/{order_id}", json=data, timeout=10)
         r.raise_for_status()
         return r.json()
@@ -164,7 +174,6 @@ class APIHandler:
         r.raise_for_status()
         return r.json()
 
-    # Aggregasi untuk Dashboard & Chart
     def summary_stats(self, orders: list[OrderRecord]) -> dict:
         n = len(orders)
         rev   = sum(o.total_sales for o in orders)

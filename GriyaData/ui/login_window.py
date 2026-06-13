@@ -1,4 +1,3 @@
-# ui/login_window.py
 import sys
 import requests
 from PySide6.QtWidgets import (
@@ -192,7 +191,9 @@ class LoginWindow(QMainWindow):
             response = requests.post(self.API_URL, json=payload, timeout=10)
 
             if response.status_code == 200:
-                self._open_dashboard(username)
+                data = response.json()
+                user_id = data.get("user_id")
+                self._open_dashboard(username, user_id)
             else:
                 try:
                     error_detail = response.json().get("detail", "Login gagal.")
@@ -230,10 +231,10 @@ class LoginWindow(QMainWindow):
             self.login_button.setText("Masuk Ke Sistem")
             self.login_button.setEnabled(True)
 
-    def _open_dashboard(self, username: str):
+    def _open_dashboard(self, username: str, user_id: int = None):
         from ui.main_window import MainWindow
         qss_path = os.path.join(os.path.dirname(__file__), "..", "styles", "app.qss")
-        self._dashboard = MainWindow(username=username)
+        self._dashboard = MainWindow(username=username, user_id=user_id)
         if os.path.exists(qss_path):
             try:
                 with open(qss_path, "r", encoding="utf-8") as f:
